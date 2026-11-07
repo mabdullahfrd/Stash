@@ -1,0 +1,6 @@
+{
+  "name": "Aura Finance — Personal Finance Tracker",
+  "description": "Apple Clean native personal finance mobile app for iOS and Android with multi-currency tracking (USD, EUR, KRW, PKR), offline accounts, and dedicated pending charity stewardship.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

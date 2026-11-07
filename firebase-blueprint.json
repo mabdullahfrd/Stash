@@ -1,0 +1,238 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and financial preferences",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Authentication UID of the user"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the user",
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "maxLength": 150
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Avatar URL",
+          "maxLength": 500
+        },
+        "primaryCurrency": {
+          "type": "string",
+          "description": "User chosen primary currency",
+          "enum": ["KRW", "USD", "EUR", "PKR"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of user registration"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of profile update"
+        }
+      },
+      "required": ["userId", "email", "primaryCurrency"]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "User financial pocket, card, or wallet",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the pocket"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the account/pocket",
+          "maxLength": 100
+        },
+        "type": {
+          "type": "string",
+          "enum": ["checking", "savings", "cash", "credit", "crypto"]
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["KRW", "USD", "EUR", "PKR"]
+        },
+        "balance": {
+          "type": "number",
+          "description": "Current balance in pocket currency"
+        },
+        "institution": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "color": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "icon": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "isArchived": {
+          "type": "boolean"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "userId", "name", "type", "currency", "balance"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial income, expense, or transfer log entry",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique transaction ID"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["income", "expense", "transfer"]
+        },
+        "amount": {
+          "type": "number",
+          "description": "Transaction amount"
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["KRW", "USD", "EUR", "PKR"]
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "subCategory": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "accountId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "toAccountId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "merchant": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "receiptUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "isCharity": {
+          "type": "boolean"
+        },
+        "charityPledgeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "userId", "type", "amount", "currency", "category", "accountId", "date"]
+    },
+    "CharityPledge": {
+      "title": "CharityPledge",
+      "description": "User charity, Zakat, or Sadaqah pledge commitment",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Pledge ID"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "targetAmount": {
+          "type": "number"
+        },
+        "fulfilledAmount": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["KRW", "USD", "EUR", "PKR"]
+        },
+        "dueDate": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "category": {
+          "type": "string",
+          "enum": ["zakat", "sadaqah", "waqf", "food_aid", "general"]
+        },
+        "isCompleted": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "userId", "title", "targetAmount", "fulfilledAmount", "currency", "category"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile with display name and currency preferences"
+    },
+    "/users/{userId}/accounts/{accountId}": {
+      "schema": "Account",
+      "description": "Financial pockets and accounts belonging to the user"
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Income, expense, and transfer records for the user"
+    },
+    "/users/{userId}/charity_pledges/{pledgeId}": {
+      "schema": "CharityPledge",
+      "description": "Charity, Zakat, and Sadaqah pledges belonging to the user"
+    }
+  }
+}
