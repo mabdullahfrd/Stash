@@ -13,6 +13,7 @@ import {
   logoutUser,
   testConnection,
 } from '../services/firebase';
+import { formatFirebaseAuthError } from '../utils/firestoreSanitize';
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -67,6 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(currentUser);
       if (currentUser) {
         setIsGuest(false);
+        setAuthError(null);
         try {
           localStorage.removeItem(GUEST_KEY);
         } catch {}
@@ -91,8 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {}
       setAuthModalOpen(false);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to sign in with Google';
-      setAuthError(msg);
+      setAuthError(formatFirebaseAuthError(err, 'Failed to sign in with Google.'));
       throw err;
     }
   };
@@ -107,8 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {}
       setAuthModalOpen(false);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to register account';
-      setAuthError(msg);
+      setAuthError(formatFirebaseAuthError(err, 'Failed to create account.'));
       throw err;
     }
   };
@@ -123,8 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {}
       setAuthModalOpen(false);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Invalid email or password';
-      setAuthError(msg);
+      setAuthError(formatFirebaseAuthError(err, 'Invalid email or password.'));
       throw err;
     }
   };

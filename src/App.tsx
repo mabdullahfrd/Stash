@@ -12,10 +12,8 @@ import { AuthView } from './components/views/AuthView';
 import { PocketsView } from './components/views/PocketsView';
 import { ScannerView } from './components/views/ScannerView';
 import { ActivityView } from './components/views/ActivityView';
-import { CharityView } from './components/views/CharityView';
 import { TransactionModal } from './components/modals/TransactionModal';
-import { CharityPledgeModal } from './components/modals/CharityPledgeModal';
-import { FulfillCharityModal } from './components/modals/FulfillCharityModal';
+import { IncomeCharityModal } from './components/modals/IncomeCharityModal';
 import { AccountModal } from './components/modals/AccountModal';
 import { CurrencyHoldModal } from './components/modals/CurrencyHoldModal';
 import { AuthModal } from './components/modals/AuthModal';
@@ -41,13 +39,11 @@ const AppContent: React.FC = () => {
           {activeTab === 'pockets' && <PocketsView />}
           {activeTab === 'scanner' && <ScannerView />}
           {activeTab === 'activity' && <ActivityView />}
-          {activeTab === 'charity' && <CharityView />}
         </div>
 
         {/* Dynamic Modals */}
         <TransactionModal />
-        <CharityPledgeModal />
-        <FulfillCharityModal />
+        <IncomeCharityModal />
         <AccountModal />
         <CurrencyHoldModal />
         <AuthModal />

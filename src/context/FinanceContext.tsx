@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Account,
   Category,
@@ -21,7 +21,7 @@ import {
   INITIAL_CHARITY_PLEDGES,
   INITIAL_TRANSACTIONS,
 } from '../data/seedData';
-import { DEFAULT_EXCHANGE_RATES } from '../utils/currencies';
+import { DEFAULT_EXCHANGE_RATES, formatCurrency } from '../utils/currencies';
 import {
   computeAccountBalances,
   computeCashFlow,
@@ -29,15 +29,27 @@ import {
   computeNetWorth,
 } from '../utils/calculations';
 import { useAuth } from './AuthContext';
-import { db, handleFirestoreError, OperationType } from '../services/firebase';
+import {
+  db,
+  logFirestoreError,
+  OperationType,
+  upsertUserProfile,
+} from '../services/firebase';
+import { sanitizeForFirestore } from '../utils/firestoreSanitize';
 import {
   collection,
   onSnapshot,
   doc,
   setDoc,
   deleteDoc,
-  getDocs,
+  writeBatch,
 } from 'firebase/firestore';
+import {
+  DEFAULT_QUESTS,
+  getLevelInfo,
+  LevelInfo,
+  Quest,
+} from '../utils/gamification';
 
 interface FinanceContextType {
   accounts: Account[];
@@ -49,6 +61,23 @@ interface FinanceContextType {
   theme: ThemeMode;
   activeTab: StudentNavTab;
   isOnline: boolean;
+  syncError: string | null;
+
+  // Gamification (Duolingo Style)
+  xp: number;
+  streak: number;
+  gems: number;
+  levelInfo: LevelInfo;
+  quests: Quest[];
+  xpFloatingNotice: { amount: number; reason: string } | null;
+  mascotSpeech: string;
+  addXp: (amount: number, reason?: string) => void;
+  claimQuest: (questId: string) => void;
+  setMascotSpeech: (text: string) => void;
+
+  // Bank Account Filtering & Demonstration
+  selectedBankFilter: string | null;
+  setSelectedBankFilter: (accountId: string | null) => void;
 
   // Computed metrics
   accountBalances: Record<string, number>;
@@ -68,6 +97,7 @@ interface FinanceContextType {
   setActiveTab: (tab: StudentNavTab) => void;
 
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  addBatchTransactions: (txList: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>[]) => Promise<number>;
   editTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
 
@@ -96,20 +126,19 @@ interface FinanceContextType {
   openHoldConvertModal: (amount: number, sourceCurrency: CurrencyCode) => void;
   closeHoldConvertModal: () => void;
 
+  // Income 10% Charity Prompt state
+  incomeCharityPrompt: { incomeAmount: number; currency: CurrencyCode; accountId: string; merchant?: string } | null;
+  triggerIncomeCharityPrompt: (prompt: { incomeAmount: number; currency: CurrencyCode; accountId: string; merchant?: string }) => void;
+  confirm10PercentCharity: () => Promise<void>;
+  dismissIncomeCharity: () => void;
+
   // Modals state
   isTransactionModalOpen: boolean;
   editingTransaction: Transaction | null;
   initialTransactionType?: TransactionType;
+  initialAccountId?: string;
   openTransactionModal: (tx?: Transaction | Partial<Transaction> | null) => void;
   closeTransactionModal: () => void;
-
-  isCharityModalOpen: boolean;
-  openCharityModal: () => void;
-  closeCharityModal: () => void;
-
-  fulfillingPledge: CharityPledge | null;
-  openFulfillModal: (pledge: CharityPledge) => void;
-  closeFulfillModal: () => void;
 
   isAccountModalOpen: boolean;
   openAccountModal: () => void;
@@ -123,16 +152,22 @@ interface FinanceContextType {
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  ACCOUNTS: 'aura_krw_accounts_v3',
-  TRANSACTIONS: 'aura_krw_transactions_v3',
-  CATEGORIES: 'aura_krw_categories_v3',
-  CHARITY: 'aura_krw_charity_v3',
-  CURRENCY: 'aura_krw_currency_v3',
-  THEME: 'aura_krw_theme_v3',
+  ACCOUNTS: 'stash_krw_accounts_v5',
+  TRANSACTIONS: 'stash_krw_transactions_v5',
+  CATEGORIES: 'stash_krw_categories_v5',
+  CHARITY: 'stash_krw_charity_v5',
+  CURRENCY: 'stash_krw_currency_v5',
+  THEME: 'stash_krw_theme_v5',
+  XP: 'stash_krw_xp_v5',
+  GEMS: 'stash_krw_gems_v5',
+  STREAK: 'stash_krw_streak_v5',
+  QUESTS: 'stash_krw_quests_v5',
 };
 
 export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isOnline } = useAuth();
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const prevUserUidRef = useRef<string | null>(null);
 
   // Accounts
   const [accounts, setAccounts] = useState<Account[]>(() => {
@@ -199,18 +234,115 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Hold Currency Converter Modal
   const [holdConvertAmount, setHoldConvertAmount] = useState<{ amount: number; sourceCurrency: CurrencyCode } | null>(null);
 
+  // Income 10% Charity Prompt state
+  const [incomeCharityPrompt, setIncomeCharityPrompt] = useState<{
+    incomeAmount: number;
+    currency: CurrencyCode;
+    accountId: string;
+    merchant?: string;
+  } | null>(null);
+
+  // Gamification State (Duolingo Style)
+  const [xp, setXp] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.XP);
+      return saved ? parseInt(saved, 10) : 740;
+    } catch {
+      return 740;
+    }
+  });
+
+  const [streak, setStreak] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.STREAK);
+      return saved ? parseInt(saved, 10) : 5;
+    } catch {
+      return 5;
+    }
+  });
+
+  const [gems, setGems] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.GEMS);
+      return saved ? parseInt(saved, 10) : 280;
+    } catch {
+      return 280;
+    }
+  });
+
+  const [quests, setQuests] = useState<Quest[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.QUESTS);
+      return saved ? JSON.parse(saved) : DEFAULT_QUESTS;
+    } catch {
+      return DEFAULT_QUESTS;
+    }
+  });
+
+  const [xpFloatingNotice, setXpFloatingNotice] = useState<{ amount: number; reason: string } | null>(null);
+  const [mascotSpeech, setMascotSpeech] = useState<string>('');
+  const [selectedBankFilter, setSelectedBankFilter] = useState<string | null>(null);
+
+  const levelInfo = useMemo(() => getLevelInfo(xp), [xp]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.XP, xp.toString());
+  }, [xp]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.STREAK, streak.toString());
+  }, [streak]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.GEMS, gems.toString());
+  }, [gems]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.QUESTS, JSON.stringify(quests));
+  }, [quests]);
+
+  const addXp = (amount: number, _reason?: string) => {
+    setXp((prev) => prev + amount);
+  };
+
+  const claimQuest = (questId: string) => {
+    const q = quests.find((quest) => quest.id === questId);
+    if (!q || q.claimed || !q.completed) return;
+    setQuests((prev) =>
+      prev.map((quest) => (quest.id === questId ? { ...quest, claimed: true } : quest))
+    );
+    setXp((prev) => prev + q.rewardXp);
+    setGems((g) => g + q.rewardGems);
+  };
+
   // Modals state
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [initialTransactionType, setInitialTransactionType] = useState<TransactionType | undefined>();
-  const [isCharityModalOpen, setIsCharityModalOpen] = useState(false);
-  const [fulfillingPledge, setFulfillingPledge] = useState<CharityPledge | null>(null);
+  const [initialAccountId, setInitialAccountId] = useState<string | undefined>();
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   // Firestore Real-Time Listener for Authenticated User
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      if (prevUserUidRef.current) {
+        // User signed out: reset state back to local demo defaults
+        prevUserUidRef.current = null;
+        setSyncError(null);
+        setAccounts(INITIAL_ACCOUNTS);
+        setTransactions(INITIAL_TRANSACTIONS);
+        setCharityPledges(INITIAL_CHARITY_PLEDGES);
+        setSelectedBankFilter(null);
+      }
+      return;
+    }
+
+    prevUserUidRef.current = user.uid;
+    setSyncError(null);
+
+    // Ensure /users/{uid} profile document is up to date
+    upsertUserProfile(user, activeCurrency);
 
     const accountsPath = `users/${user.uid}/accounts`;
     const txsPath = `users/${user.uid}/transactions`;
@@ -220,16 +352,19 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const unsubAccounts = onSnapshot(
       collection(db, accountsPath),
       async (snapshot) => {
+        setSyncError(null);
         if (snapshot.empty) {
-          // Bootstrap user's cloud account with initial KRW accounts
           for (const acc of INITIAL_ACCOUNTS) {
             try {
-              await setDoc(doc(db, 'users', user.uid, 'accounts', acc.id), {
-                ...acc,
-                userId: user.uid,
-              });
+              await setDoc(
+                doc(db, 'users', user.uid, 'accounts', acc.id),
+                sanitizeForFirestore({
+                  ...acc,
+                  userId: user.uid,
+                })
+              );
             } catch (e) {
-              console.error('Error seeding initial account:', e);
+              logFirestoreError(e, OperationType.WRITE, `${accountsPath}/${acc.id}`);
             }
           }
         } else {
@@ -238,7 +373,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, accountsPath);
+        const info = logFirestoreError(error, OperationType.LIST, accountsPath);
+        setSyncError(`Cloud accounts sync warning: ${info.error}`);
       }
     );
 
@@ -247,26 +383,28 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, txsPath),
       async (snapshot) => {
         if (snapshot.empty) {
-          // Bootstrap with initial transactions
           for (const tx of INITIAL_TRANSACTIONS) {
             try {
-              await setDoc(doc(db, 'users', user.uid, 'transactions', tx.id), {
-                ...tx,
-                userId: user.uid,
-              });
+              await setDoc(
+                doc(db, 'users', user.uid, 'transactions', tx.id),
+                sanitizeForFirestore({
+                  ...tx,
+                  userId: user.uid,
+                })
+              );
             } catch (e) {
-              console.error('Error seeding initial transaction:', e);
+              logFirestoreError(e, OperationType.WRITE, `${txsPath}/${tx.id}`);
             }
           }
         } else {
           const cloudTxs = snapshot.docs.map((d) => d.data() as Transaction);
-          // Sort descending by date/createdAt
           cloudTxs.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
           setTransactions(cloudTxs);
         }
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, txsPath);
+        const info = logFirestoreError(error, OperationType.LIST, txsPath);
+        setSyncError(`Cloud transactions sync warning: ${info.error}`);
       }
     );
 
@@ -277,12 +415,15 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (snapshot.empty) {
           for (const pledge of INITIAL_CHARITY_PLEDGES) {
             try {
-              await setDoc(doc(db, 'users', user.uid, 'charity_pledges', pledge.id), {
-                ...pledge,
-                userId: user.uid,
-              });
+              await setDoc(
+                doc(db, 'users', user.uid, 'charity_pledges', pledge.id),
+                sanitizeForFirestore({
+                  ...pledge,
+                  userId: user.uid,
+                })
+              );
             } catch (e) {
-              console.error('Error seeding initial pledge:', e);
+              logFirestoreError(e, OperationType.WRITE, `${pledgesPath}/${pledge.id}`);
             }
           }
         } else {
@@ -291,7 +432,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, pledgesPath);
+        logFirestoreError(error, OperationType.LIST, pledgesPath);
       }
     );
 
@@ -363,51 +504,179 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setHoldConvertAmount(null);
   };
 
+  // Income 10% Charity Prompt handlers
+  const triggerIncomeCharityPrompt = (prompt: {
+    incomeAmount: number;
+    currency: CurrencyCode;
+    accountId: string;
+    merchant?: string;
+  }) => {
+    setIncomeCharityPrompt(prompt);
+  };
+
+  const confirm10PercentCharity = async () => {
+    if (!incomeCharityPrompt) return;
+    const { incomeAmount, currency, accountId, merchant } = incomeCharityPrompt;
+    const charityAmount = Math.round(incomeAmount * 0.1);
+    const charityCat = categories.find((c) => c.isCharity || c.id === 'cat-charity') || categories[0];
+    const today = new Date().toISOString().split('T')[0];
+
+    await addTransaction({
+      type: 'expense',
+      amount: charityAmount,
+      currency,
+      date: today,
+      categoryId: charityCat.id,
+      accountId,
+      merchant: 'Charity Giving (10% of Income)',
+      notes: `10% charity tithe from income of ${formatCurrency(incomeAmount, currency)}${merchant ? ` (${merchant})` : ''}`,
+      isCharity: true,
+    });
+
+    addXp(100, 'Generosity Tithe 10%! +100 XP');
+    setGems((g) => g + 30);
+    setQuests((prev) =>
+      prev.map((q) => (q.id === 'quest-charity-tithe' ? { ...q, progress: 1, completed: true, claimed: true } : q))
+    );
+
+    setIncomeCharityPrompt(null);
+  };
+
+  const dismissIncomeCharity = () => {
+    setIncomeCharityPrompt(null);
+  };
+
   // Mutations
   const addTransaction = async (txData: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();
-    const newTx: Transaction = {
+    const newTx: Transaction = sanitizeForFirestore({
       ...txData,
       id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       createdAt: now,
       updatedAt: now,
-    };
+    });
 
     setTransactions((prev) => [newTx, ...prev]);
+
+    addXp(20, txData.type === 'income' ? 'Income Logged! +20 XP' : 'Expense Logged! +20 XP');
+    setQuests((prev) =>
+      prev.map((q) => (q.id === 'quest-daily-expense' ? { ...q, progress: 1, completed: true } : q))
+    );
+
+    if (txData.type === 'income' && txData.amount > 0) {
+      setIncomeCharityPrompt({
+        incomeAmount: txData.amount,
+        currency: txData.currency,
+        accountId: txData.accountId,
+        merchant: txData.merchant,
+      });
+    }
 
     if (user) {
       const path = `users/${user.uid}/transactions/${newTx.id}`;
       try {
-        await setDoc(doc(db, 'users', user.uid, 'transactions', newTx.id), {
-          ...newTx,
-          userId: user.uid,
-        });
+        await setDoc(
+          doc(db, 'users', user.uid, 'transactions', newTx.id),
+          sanitizeForFirestore({
+            ...newTx,
+            userId: user.uid,
+          })
+        );
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, path);
+        const info = logFirestoreError(error, OperationType.WRITE, path);
+        setSyncError(`Failed to sync transaction: ${info.error}`);
       }
     }
   };
 
-  const editTransaction = async (id: string, updates: Partial<Transaction>) => {
+  const addBatchTransactions = async (
+    txList: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>[]
+  ): Promise<number> => {
+    if (!txList.length) return 0;
     const now = new Date().toISOString();
-    setTransactions((prev) =>
-      prev.map((tx) => (tx.id === id ? { ...tx, ...updates, updatedAt: now } : tx))
+    const baseTime = Date.now();
+
+    const newTxs: Transaction[] = txList.map((txData, idx) =>
+      sanitizeForFirestore({
+        ...txData,
+        id: `tx-${baseTime}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+        createdAt: now,
+        updatedAt: now,
+      })
     );
 
+    setTransactions((prev) => {
+      const merged = [...newTxs, ...prev];
+      merged.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
+      return merged;
+    });
+
+    addXp(newTxs.length * 15, `Imported ${newTxs.length} entries`);
+    setQuests((prev) =>
+      prev.map((q) => (q.id === 'quest-daily-expense' ? { ...q, progress: 1, completed: true } : q))
+    );
+
+    // If the batch includes income inflows, offer a single 10% charity prompt for the largest/sum income
+    const totalIncomeInBatch = newTxs
+      .filter((t) => t.type === 'income' && t.amount > 0)
+      .reduce((sum, t) => sum + t.amount, 0);
+    if (totalIncomeInBatch > 0) {
+      const firstIncome = newTxs.find((t) => t.type === 'income' && t.amount > 0)!;
+      setIncomeCharityPrompt({
+        incomeAmount: totalIncomeInBatch,
+        currency: firstIncome.currency,
+        accountId: firstIncome.accountId,
+        merchant: 'Imported Bank Inflows',
+      });
+    }
+
     if (user) {
+      const path = `users/${user.uid}/transactions`;
+      try {
+        const batch = writeBatch(db);
+        for (const tx of newTxs) {
+          batch.set(
+            doc(db, 'users', user.uid, 'transactions', tx.id),
+            sanitizeForFirestore({
+              ...tx,
+              userId: user.uid,
+            })
+          );
+        }
+        await batch.commit();
+      } catch (error) {
+        const info = logFirestoreError(error, OperationType.WRITE, path);
+        setSyncError(`Failed to sync batch import: ${info.error}`);
+      }
+    }
+
+    return newTxs.length;
+  };
+
+  const editTransaction = async (id: string, updates: Partial<Transaction>) => {
+    const now = new Date().toISOString();
+    const existingTx = transactions.find((t) => t.id === id);
+    const updatedPayload = existingTx
+      ? sanitizeForFirestore({ ...existingTx, ...updates, updatedAt: now })
+      : null;
+
+    setTransactions((prev) =>
+      prev.map((tx) => (tx.id === id ? sanitizeForFirestore({ ...tx, ...updates, updatedAt: now }) : tx))
+    );
+
+    if (user && updatedPayload) {
       const path = `users/${user.uid}/transactions/${id}`;
       try {
-        const existingTx = transactions.find((t) => t.id === id);
-        if (existingTx) {
-          await setDoc(doc(db, 'users', user.uid, 'transactions', id), {
-            ...existingTx,
-            ...updates,
-            updatedAt: now,
+        await setDoc(
+          doc(db, 'users', user.uid, 'transactions', id),
+          sanitizeForFirestore({
+            ...updatedPayload,
             userId: user.uid,
-          });
-        }
+          })
+        );
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, path);
+        const info = logFirestoreError(error, OperationType.WRITE, path);
+        setSyncError(`Failed to update transaction: ${info.error}`);
       }
     }
   };
@@ -420,62 +689,77 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'transactions', id));
       } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, path);
+        const info = logFirestoreError(error, OperationType.DELETE, path);
+        setSyncError(`Failed to delete transaction: ${info.error}`);
       }
     }
   };
 
   const addAccount = async (accountData: Omit<Account, 'id'>) => {
-    const newAccount: Account = {
+    const newAccount: Account = sanitizeForFirestore({
       ...accountData,
       id: `acc-${Date.now()}`,
-    };
+    });
     setAccounts((prev) => [...prev, newAccount]);
+
+    addXp(30, 'Bank Account Linked! +30 XP');
+    setGems((g) => g + 10);
+    setQuests((prev) =>
+      prev.map((q) => (q.id === 'quest-bank-demonstrate' ? { ...q, progress: 1, completed: true } : q))
+    );
 
     if (user) {
       const path = `users/${user.uid}/accounts/${newAccount.id}`;
       try {
-        await setDoc(doc(db, 'users', user.uid, 'accounts', newAccount.id), {
-          ...newAccount,
-          userId: user.uid,
-        });
+        await setDoc(
+          doc(db, 'users', user.uid, 'accounts', newAccount.id),
+          sanitizeForFirestore({
+            ...newAccount,
+            userId: user.uid,
+          })
+        );
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, path);
+        const info = logFirestoreError(error, OperationType.WRITE, path);
+        setSyncError(`Failed to sync account: ${info.error}`);
       }
     }
   };
 
   const editAccount = async (id: string, updates: Partial<Account>) => {
+    const existingAcc = accounts.find((a) => a.id === id);
     setAccounts((prev) =>
-      prev.map((acc) => (acc.id === id ? { ...acc, ...updates } : acc))
+      prev.map((acc) => (acc.id === id ? sanitizeForFirestore({ ...acc, ...updates }) : acc))
     );
 
-    if (user) {
+    if (user && existingAcc) {
       const path = `users/${user.uid}/accounts/${id}`;
       try {
-        const existingAcc = accounts.find((a) => a.id === id);
-        if (existingAcc) {
-          await setDoc(doc(db, 'users', user.uid, 'accounts', id), {
+        await setDoc(
+          doc(db, 'users', user.uid, 'accounts', id),
+          sanitizeForFirestore({
             ...existingAcc,
             ...updates,
             userId: user.uid,
-          });
-        }
+          })
+        );
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, path);
+        const info = logFirestoreError(error, OperationType.WRITE, path);
+        setSyncError(`Failed to update account: ${info.error}`);
       }
     }
   };
 
   const deleteAccount = async (id: string) => {
     setAccounts((prev) => prev.filter((acc) => acc.id !== id));
+    setSelectedBankFilter((prev) => (prev === id ? null : prev));
 
     if (user) {
       const path = `users/${user.uid}/accounts/${id}`;
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'accounts', id));
       } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, path);
+        const info = logFirestoreError(error, OperationType.DELETE, path);
+        setSyncError(`Failed to delete account: ${info.error}`);
       }
     }
   };
@@ -489,25 +773,29 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     notes?: string;
   }) => {
     const now = new Date().toISOString().split('T')[0];
-    const newPledge: CharityPledge = {
+    const newPledge: CharityPledge = sanitizeForFirestore({
       ...pledgeData,
       id: `pledge-${Date.now()}`,
       fulfilledAmount: 0,
       status: 'pending',
       createdAt: now,
       updatedAt: now,
-    };
+    });
     setCharityPledges((prev) => [newPledge, ...prev]);
 
     if (user) {
       const path = `users/${user.uid}/charity_pledges/${newPledge.id}`;
       try {
-        await setDoc(doc(db, 'users', user.uid, 'charity_pledges', newPledge.id), {
-          ...newPledge,
-          userId: user.uid,
-        });
+        await setDoc(
+          doc(db, 'users', user.uid, 'charity_pledges', newPledge.id),
+          sanitizeForFirestore({
+            ...newPledge,
+            userId: user.uid,
+          })
+        );
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, path);
+        const info = logFirestoreError(error, OperationType.WRITE, path);
+        setSyncError(`Failed to sync charity pledge: ${info.error}`);
       }
     }
   };
@@ -522,7 +810,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const today = new Date().toISOString().split('T')[0];
     const now = new Date().toISOString();
 
-    const newTx: Transaction = {
+    const newTx: Transaction = sanitizeForFirestore({
       id: `tx-charity-${Date.now()}`,
       type: 'expense',
       amount,
@@ -536,18 +824,18 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       charityPledgeId: pledge.id,
       createdAt: now,
       updatedAt: now,
-    };
+    });
 
     setTransactions((prev) => [newTx, ...prev]);
 
     const newFulfilled = pledge.fulfilledAmount + amount;
     const newStatus = newFulfilled >= pledge.pledgedAmount ? 'fulfilled' : 'partially_fulfilled';
-    const updatedPledge: CharityPledge = {
+    const updatedPledge: CharityPledge = sanitizeForFirestore({
       ...pledge,
       fulfilledAmount: newFulfilled,
       status: newStatus,
       updatedAt: now,
-    };
+    });
 
     setCharityPledges((prev) =>
       prev.map((p) => (p.id === pledgeId ? updatedPledge : p))
@@ -555,16 +843,23 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (user) {
       try {
-        await setDoc(doc(db, 'users', user.uid, 'transactions', newTx.id), {
-          ...newTx,
-          userId: user.uid,
-        });
-        await setDoc(doc(db, 'users', user.uid, 'charity_pledges', pledgeId), {
-          ...updatedPledge,
-          userId: user.uid,
-        });
+        await setDoc(
+          doc(db, 'users', user.uid, 'transactions', newTx.id),
+          sanitizeForFirestore({
+            ...newTx,
+            userId: user.uid,
+          })
+        );
+        await setDoc(
+          doc(db, 'users', user.uid, 'charity_pledges', pledgeId),
+          sanitizeForFirestore({
+            ...updatedPledge,
+            userId: user.uid,
+          })
+        );
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+        const info = logFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+        setSyncError(`Failed to sync charity fulfillment: ${info.error}`);
       }
     }
   };
@@ -577,7 +872,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'charity_pledges', id));
       } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, path);
+        const info = logFirestoreError(error, OperationType.DELETE, path);
+        setSyncError(`Failed to delete charity pledge: ${info.error}`);
       }
     }
   };
@@ -588,20 +884,30 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCategories(INITIAL_CATEGORIES);
     setCharityPledges(INITIAL_CHARITY_PLEDGES);
     setActiveCurrencyState('KRW');
+    setSelectedBankFilter(null);
 
     if (user) {
       try {
         for (const acc of INITIAL_ACCOUNTS) {
-          await setDoc(doc(db, 'users', user.uid, 'accounts', acc.id), { ...acc, userId: user.uid });
+          await setDoc(
+            doc(db, 'users', user.uid, 'accounts', acc.id),
+            sanitizeForFirestore({ ...acc, userId: user.uid })
+          );
         }
         for (const tx of INITIAL_TRANSACTIONS) {
-          await setDoc(doc(db, 'users', user.uid, 'transactions', tx.id), { ...tx, userId: user.uid });
+          await setDoc(
+            doc(db, 'users', user.uid, 'transactions', tx.id),
+            sanitizeForFirestore({ ...tx, userId: user.uid })
+          );
         }
         for (const p of INITIAL_CHARITY_PLEDGES) {
-          await setDoc(doc(db, 'users', user.uid, 'charity_pledges', p.id), { ...p, userId: user.uid });
+          await setDoc(
+            doc(db, 'users', user.uid, 'charity_pledges', p.id),
+            sanitizeForFirestore({ ...p, userId: user.uid })
+          );
         }
       } catch (e) {
-        console.error('Error resetting cloud data:', e);
+        logFirestoreError(e, OperationType.WRITE, `users/${user.uid}`);
       }
     }
   };
@@ -674,9 +980,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (tx && 'id' in tx && tx.id) {
       setEditingTransaction(tx as Transaction);
       setInitialTransactionType(tx.type);
+      setInitialAccountId(tx.accountId);
     } else {
       setEditingTransaction(null);
       setInitialTransactionType(tx?.type || 'expense');
+      setInitialAccountId(tx?.accountId);
     }
     setIsTransactionModalOpen(true);
   };
@@ -685,13 +993,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsTransactionModalOpen(false);
     setEditingTransaction(null);
     setInitialTransactionType(undefined);
+    setInitialAccountId(undefined);
   };
-
-  const openCharityModal = () => setIsCharityModalOpen(true);
-  const closeCharityModal = () => setIsCharityModalOpen(false);
-
-  const openFulfillModal = (pledge: CharityPledge) => setFulfillingPledge(pledge);
-  const closeFulfillModal = () => setFulfillingPledge(null);
 
   const openAccountModal = () => setIsAccountModalOpen(true);
   const closeAccountModal = () => setIsAccountModalOpen(false);
@@ -711,6 +1014,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         theme,
         activeTab,
         isOnline,
+        syncError,
         accountBalances,
         netWorth,
         cashFlow,
@@ -719,6 +1023,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setTheme,
         setActiveTab,
         addTransaction,
+        addBatchTransactions,
         editTransaction,
         deleteTransaction,
         addAccount,
@@ -734,17 +1039,28 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         holdConvertAmount,
         openHoldConvertModal,
         closeHoldConvertModal,
+        incomeCharityPrompt,
+        triggerIncomeCharityPrompt,
+        confirm10PercentCharity,
+        dismissIncomeCharity,
+        xp,
+        streak,
+        gems,
+        levelInfo,
+        quests,
+        xpFloatingNotice,
+        mascotSpeech,
+        addXp,
+        claimQuest,
+        setMascotSpeech,
+        selectedBankFilter,
+        setSelectedBankFilter,
         isTransactionModalOpen,
         editingTransaction,
         initialTransactionType,
+        initialAccountId,
         openTransactionModal,
         closeTransactionModal,
-        isCharityModalOpen,
-        openCharityModal,
-        closeCharityModal,
-        fulfillingPledge,
-        openFulfillModal,
-        closeFulfillModal,
         isAccountModalOpen,
         openAccountModal,
         closeAccountModal,

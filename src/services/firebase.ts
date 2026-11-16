@@ -18,13 +18,10 @@ import {
   getFirestore,
   doc,
   getDocFromServer,
-  collection,
-  onSnapshot,
   setDoc,
-  deleteDoc,
-  query,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { sanitizeForFirestore } from '../utils/firestoreSanitize';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -63,11 +60,11 @@ export interface FirestoreErrorInfo {
   };
 }
 
-export function handleFirestoreError(
+export function logFirestoreError(
   error: unknown,
   operationType: OperationType,
   path: string | null
-): never {
+): FirestoreErrorInfo {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -86,7 +83,37 @@ export function handleFirestoreError(
     path,
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
+  return errInfo;
+}
+
+export function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null
+): never {
+  const errInfo = logFirestoreError(error, operationType, path);
   throw new Error(JSON.stringify(errInfo));
+}
+
+export async function upsertUserProfile(user: FirebaseUser, primaryCurrency: string): Promise<void> {
+  const path = `users/${user.uid}`;
+  const now = new Date().toISOString();
+  try {
+    await setDoc(
+      doc(db, 'users', user.uid),
+      sanitizeForFirestore({
+        userId: user.uid,
+        email: user.email || '',
+        displayName: user.displayName || undefined,
+        photoURL: user.photoURL || undefined,
+        primaryCurrency,
+        updatedAt: now,
+      }),
+      { merge: true }
+    );
+  } catch (error) {
+    logFirestoreError(error, OperationType.WRITE, path);
+  }
 }
 
 // Connection test on boot

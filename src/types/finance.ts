@@ -16,6 +16,8 @@ export interface Account {
   balance: number;
   creditLimit?: number;
   institution: string;
+  accountNumber?: string; // e.g. "•••• 4921"
+  bankCode?: string; // e.g. "shinhan", "kakao", "toss"
   color: string;
   icon: string;
   isArchived?: boolean;
@@ -84,6 +86,6 @@ export interface CharityPledge {
   updatedAt: string;
 }
 
-export type StudentNavTab = 'pockets' | 'scanner' | 'activity' | 'charity';
+export type StudentNavTab = 'pockets' | 'scanner' | 'activity';
 
 export type ExchangeRates = Record<CurrencyCode, number>;

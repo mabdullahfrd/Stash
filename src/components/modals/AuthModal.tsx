@@ -5,7 +5,8 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { X, Mail, Lock, User, CheckCircle2, Cloud, AlertCircle, LogOut, ShieldCheck } from 'lucide-react';
+import { useFinance } from '../../context/FinanceContext';
+import { X, Mail, Lock, User, CheckCircle2, AlertCircle, LogOut, ShieldCheck } from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
   const {
@@ -20,6 +21,7 @@ export const AuthModal: React.FC = () => {
     setAuthError,
     isOnline,
   } = useAuth();
+  const { syncError } = useFinance();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -41,7 +43,7 @@ export const AuthModal: React.FC = () => {
         await signInEmail(email, password);
       }
     } catch {
-      // Error handled in AuthContext
+      // Handled in AuthContext
     } finally {
       setIsSubmitting(false);
     }
@@ -53,110 +55,93 @@ export const AuthModal: React.FC = () => {
     try {
       await loginWithGoogle();
     } catch {
-      // Error handled in AuthContext
+      // Handled in AuthContext
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-opacity">
-      <div className="w-full max-w-md bg-white dark:bg-[#1C1C1E] rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl border border-slate-200 dark:border-white/10 max-h-[90vh] overflow-y-auto no-scrollbar">
-        {/* Header */}
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs">
+      <div className="w-full max-w-md bg-white dark:bg-[#161915] rounded-t-[28px] sm:rounded-[28px] p-6 shadow-2xl border border-black/[0.08] dark:border-white/[0.08] max-h-[90vh] overflow-y-auto no-scrollbar">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-blue-500/10 dark:bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
-              <ShieldCheck className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-[#141617] dark:bg-[#C8EC45] flex items-center justify-center text-[#C8EC45] dark:text-[#111315]">
+              <ShieldCheck className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                {user ? 'My Cloud Account' : mode === 'signin' ? 'Sign In' : 'Create Account'}
+              <h3 className="text-base font-bold text-[#111315] dark:text-[#F4F5F0]">
+                {user ? 'Cloud Account' : mode === 'signin' ? 'Sign In' : 'Create Account'}
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {user ? 'Real-time sync enabled' : 'Sync finances securely across all devices'}
+              <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
+                {isOnline ? 'Cloud sync ready' : 'Offline local storage'}
               </p>
             </div>
           </div>
           <button
             onClick={closeAuthModal}
-            className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white"
+            className="w-8 h-8 rounded-full bg-[#F4F5F0] dark:bg-white/[0.06] flex items-center justify-center text-[#5E655A] dark:text-[#A4AC9E]"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Status Banner */}
-        <div className="mb-5 px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-              }`}
-            />
-            <span className="text-slate-700 dark:text-slate-300 font-medium">
-              {isOnline ? 'Live Real-Time Cloud Sync' : 'Offline Mode (Local Storage)'}
-            </span>
-          </div>
-          <Cloud className="w-4 h-4 text-blue-500" />
-        </div>
-
         {user ? (
-          /* Logged In View */
-          <div className="space-y-5">
-            <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200/50 dark:border-blue-800/40">
+          <div className="space-y-4">
+            <div className="p-4 rounded-2xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-black/[0.06] dark:border-white/[0.06]">
               <div className="flex items-center gap-3">
                 {user.photoURL ? (
                   <img
                     src={user.photoURL}
                     alt={user.displayName || 'User'}
-                    className="w-12 h-12 rounded-full border border-white/20 object-cover"
+                    className="w-11 h-11 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="w-12 h-12 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-lg">
+                  <div className="w-11 h-11 rounded-full bg-[#141617] dark:bg-[#C8EC45] text-[#C8EC45] dark:text-[#111315] font-bold flex items-center justify-center text-base">
                     {(user.displayName || user.email || 'U')[0].toUpperCase()}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-semibold text-slate-900 dark:text-white truncate">
+                  <h4 className="font-semibold text-sm text-[#111315] dark:text-[#F4F5F0] truncate">
                     {user.displayName || 'Personal Account'}
                   </h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  <p className="text-xs text-[#6B7268] dark:text-[#8E9689] truncate">
                     {user.email}
                   </p>
-                  <div className="mt-1 flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Personal Firestore Database Active</span>
+                  <div className="mt-1 flex items-center gap-1 text-[11px] text-emerald-700 dark:text-[#C8EC45] font-medium">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>Firestore sync active</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              Every expense, pocket balance, scanned receipt, and charity pledge is automatically saved
-              and synchronized in real-time to your private cloud storage.
-            </p>
+            {syncError && (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 text-xs flex items-start gap-2 border border-amber-200/70 dark:border-amber-900/40">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{syncError}</span>
+              </div>
+            )}
 
             <button
               onClick={async () => {
                 await signOut();
                 closeAuthModal();
               }}
-              className="w-full py-3.5 px-4 rounded-2xl bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 font-semibold text-sm hover:bg-red-100 dark:hover:bg-red-900/40 transition flex items-center justify-center gap-2 border border-red-200/50 dark:border-red-900/30"
+              className="w-full py-3 px-4 rounded-xl bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 font-semibold text-xs hover:bg-rose-100 dark:hover:bg-rose-900/40 transition flex items-center justify-center gap-2 border border-rose-200/60 dark:border-rose-900/30"
             >
               <LogOut className="w-4 h-4" />
-              Sign Out of Account
+              Sign Out
             </button>
           </div>
         ) : (
-          /* Sign In / Sign Up Form */
           <div className="space-y-4">
-            {/* Google Sign In Button */}
             <button
               onClick={handleGoogleSignIn}
               disabled={isSubmitting}
               type="button"
-              className="w-full py-3.5 px-4 rounded-2xl bg-white dark:bg-white/10 hover:bg-slate-50 dark:hover:bg-white/15 text-slate-900 dark:text-white font-semibold text-sm transition flex items-center justify-center gap-3 border border-slate-200 dark:border-white/10 shadow-sm active:scale-[0.99]"
+              className="w-full py-3 px-4 rounded-xl bg-[#F4F5F0] dark:bg-white/[0.05] hover:bg-black/[0.06] dark:hover:bg-white/[0.09] text-[#111315] dark:text-[#F4F5F0] font-semibold text-xs transition flex items-center justify-center gap-2.5 border border-black/[0.06] dark:border-white/[0.08]"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path
@@ -179,105 +164,79 @@ export const AuthModal: React.FC = () => {
               <span>Sign in with Google</span>
             </button>
 
-            <div className="flex items-center gap-3 my-2">
-              <div className="flex-1 h-[1px] bg-slate-200 dark:bg-white/10" />
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">
-                or with email
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-black/[0.07] dark:bg-white/[0.08]" />
+              <span className="text-[10px] uppercase font-semibold tracking-wider text-[#8E9689]">
+                or email
               </span>
-              <div className="flex-1 h-[1px] bg-slate-200 dark:bg-white/10" />
+              <div className="flex-1 h-px bg-black/[0.07] dark:bg-white/[0.08]" />
             </div>
 
-            {/* Error Message */}
             {authError && (
-              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-xs flex items-center gap-2 border border-red-200 dark:border-red-900/40">
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2 border border-rose-200 dark:border-rose-900/40">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{authError}</span>
               </div>
             )}
 
-            {/* Email Form */}
             <form onSubmit={handleSubmit} className="space-y-3">
               {mode === 'signup' && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Your Name
-                  </label>
-                  <div className="relative">
-                    <User className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-                    <input
-                      type="text"
-                      placeholder="e.g. Min-jun or Abdullah"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      className="w-full pl-9 pr-4 py-3 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
+                <div className="relative">
+                  <User className="w-4 h-4 text-[#8E9689] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Full name"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-black/[0.08] dark:border-white/[0.1] text-xs text-[#111315] dark:text-[#F4F5F0] focus:outline-none focus:border-[#141617] dark:focus:border-[#C8EC45]"
+                  />
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="name@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-9 pr-4 py-3 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-[#8E9689] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  required
+                  placeholder="name@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-black/[0.08] dark:border-white/[0.1] text-xs text-[#111315] dark:text-[#F4F5F0] focus:outline-none focus:border-[#141617] dark:focus:border-[#C8EC45]"
+                />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-                  <input
-                    type="password"
-                    required
-                    minLength={6}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-9 pr-4 py-3 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-[#8E9689] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-black/[0.08] dark:border-white/[0.1] text-xs text-[#111315] dark:text-[#F4F5F0] focus:outline-none focus:border-[#141617] dark:focus:border-[#C8EC45]"
+                />
               </div>
 
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-3.5 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-[0.99] text-white font-semibold text-sm transition shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2"
+                className="w-full py-3 px-4 rounded-xl bg-[#141617] hover:bg-[#23272A] dark:bg-[#C8EC45] dark:hover:bg-[#B8DE35] text-white dark:text-[#111315] font-semibold text-xs transition"
               >
-                {isSubmitting ? (
-                  <span>Processing...</span>
-                ) : mode === 'signin' ? (
-                  <span>Sign In with Email</span>
-                ) : (
-                  <span>Create Account</span>
-                )}
+                {isSubmitting ? 'Processing...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
               </button>
             </form>
 
-            {/* Toggle Mode */}
-            <div className="text-center pt-2">
+            <div className="text-center pt-1">
               <button
                 type="button"
                 onClick={() => {
                   setMode(mode === 'signin' ? 'signup' : 'signin');
                   setAuthError(null);
                 }}
-                className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                className="text-xs font-medium text-[#5E655A] dark:text-[#A4AC9E] hover:text-[#111315] dark:hover:text-white transition"
               >
-                {mode === 'signin'
-                  ? "Don't have an account? Sign up"
-                  : 'Already have an account? Sign in'}
+                {mode === 'signin' ? "Don't have an account? Create one" : 'Already have an account? Sign in'}
               </button>
             </div>
           </div>
