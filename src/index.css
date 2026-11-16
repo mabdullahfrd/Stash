@@ -35,3 +35,167 @@
     scrollbar-width: none;
   }
 }
+
+/* Compositor-only fintech launch & onboarding animations */
+@keyframes stashBadgeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.76);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes stashRingIn {
+  from {
+    opacity: 0;
+    transform: scale(0.84);
+  }
+  to {
+    opacity: 0.38;
+    transform: scale(1);
+  }
+}
+
+@keyframes stashBarFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes stashBarFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes stashNotchPop {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes stashFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes stashProgressSweep {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes stashScanSweep {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(8px);
+  }
+  50% {
+    opacity: 0.85;
+    transform: translateY(172px);
+  }
+}
+
+@keyframes stashBarGrow {
+  from {
+    opacity: 0.35;
+    transform: scaleY(0.15);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+.anim-stash-badge {
+  animation: stashBadgeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.anim-stash-ring {
+  animation: stashRingIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+}
+
+.anim-stash-bar-1 {
+  animation: stashBarFromLeft 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.14s both;
+}
+
+.anim-stash-bar-2 {
+  animation: stashBarFromRight 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.24s both;
+}
+
+.anim-stash-bar-3 {
+  animation: stashBarFromLeft 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.34s both;
+}
+
+.anim-stash-notch {
+  transform-origin: 15.75px 12px;
+  animation: stashNotchPop 0.28s cubic-bezier(0.16, 1, 0.3, 1) 0.46s both;
+}
+
+.anim-stash-fade-up {
+  animation: stashFadeUp 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.anim-stash-wordmark {
+  animation: stashFadeUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both;
+}
+
+.anim-stash-progress {
+  transform-origin: 0% 50%;
+  animation: stashProgressSweep 1.45s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+}
+
+.anim-stash-scan {
+  animation: stashScanSweep 3.2s ease-in-out infinite;
+}
+
+.anim-stash-bar-grow {
+  transform-origin: 50% 100%;
+  animation: stashBarGrow 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-stash-badge,
+  .anim-stash-ring,
+  .anim-stash-bar-1,
+  .anim-stash-bar-2,
+  .anim-stash-bar-3,
+  .anim-stash-notch,
+  .anim-stash-fade-up,
+  .anim-stash-wordmark,
+  .anim-stash-progress,
+  .anim-stash-scan,
+  .anim-stash-bar-grow {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

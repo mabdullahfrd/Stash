@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FinanceProvider, useFinance } from './context/FinanceContext';
 import { DeviceFrame } from './components/shell/DeviceFrame';
@@ -18,16 +18,44 @@ import { AccountModal } from './components/modals/AccountModal';
 import { CurrencyHoldModal } from './components/modals/CurrencyHoldModal';
 import { AuthModal } from './components/modals/AuthModal';
 import { SettingsModal } from './components/modals/SettingsModal';
+import { LaunchSplash } from './components/onboarding/LaunchSplash';
+import { OnboardingFlow } from './components/onboarding/OnboardingFlow';
+import { PreAuthStage, resolveInitialPreAuthStage } from './utils/onboardingFlow';
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const { activeTab, isSettingsModalOpen, closeSettingsModal } = useFinance();
+  const [preAuthStage, setPreAuthStage] = useState<PreAuthStage>(() =>
+    resolveInitialPreAuthStage(
+      typeof window !== 'undefined' ? window.location.search : ''
+    )
+  );
+
+  // During initial launch, play the animated logo splash while auth status resolves.
+  if (preAuthStage === 'splash' && (loading || !isAuthenticated)) {
+    return (
+      <LaunchSplash
+        readyToAdvance={!loading}
+        onComplete={() => setPreAuthStage('onboarding')}
+      />
+    );
+  }
 
   if (!isAuthenticated) {
+    if (preAuthStage === 'onboarding') {
+      return (
+        <OnboardingFlow
+          onComplete={() => setPreAuthStage('auth')}
+          onReplaySplash={() => setPreAuthStage('splash')}
+        />
+      );
+    }
+
     return (
-      <DeviceFrame>
-        <AuthView />
-      </DeviceFrame>
+      <AuthView
+        onBackToHighlights={() => setPreAuthStage('onboarding')}
+        onReplaySplash={() => setPreAuthStage('splash')}
+      />
     );
   }
 

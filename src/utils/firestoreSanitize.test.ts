@@ -42,4 +42,8 @@ test('formatFirebaseAuthError maps common Firebase Auth codes cleanly', () => {
     formatFirebaseAuthError({ code: 'auth/invalid-credential', message: 'raw' }),
     /Incorrect email or password/i
   );
+  assert.match(
+    formatFirebaseAuthError({ code: 'auth/unauthorized-domain', message: 'raw' }),
+    /Authorized domains/i
+  );
 });

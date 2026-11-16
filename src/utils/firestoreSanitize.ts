@@ -49,7 +49,10 @@ export function formatFirebaseAuthError(error: unknown, fallback = 'Authenticati
     return 'Browser blocked the Google sign-in popup. Please allow popups for this site.';
   }
   if (code === 'auth/unauthorized-domain') {
-    return 'This preview domain is not yet authorized in Firebase Auth settings. Use Demo Mode or add the domain in Firebase Console.';
+    const host = typeof window !== 'undefined' ? window.location?.hostname : '';
+    return host
+      ? `Domain "${host}" is not authorized in Firebase Auth yet. Add "${host}" under Authentication → Settings → Authorized domains in Firebase Console, or use Demo Mode.`
+      : 'This domain is not yet authorized in Firebase Auth settings. Add it under Authentication → Settings → Authorized domains in Firebase Console, or use Demo Mode.';
   }
   if (code === 'auth/operation-not-allowed') {
     return 'Email/password sign-in is disabled in Firebase Console. Please use Continue with Google or Demo Mode.';
