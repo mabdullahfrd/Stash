@@ -45,8 +45,12 @@ export const INITIAL_CATEGORIES: Category[] = [
   { id: 'cat-dining', name: 'Dining & Takeout', type: 'expense', icon: 'Utensils', color: '#AF52DE' },
   { id: 'cat-study', name: 'Study & Uni Gear', type: 'expense', icon: 'BookOpen', color: '#5856D6' },
   { id: 'cat-transit', name: 'Transit & Metro', type: 'expense', icon: 'Bus', color: '#007AFF' },
+  { id: 'cat-bills', name: 'Bills & Rent', type: 'expense', icon: 'Receipt', color: '#64748B' },
+  { id: 'cat-subscriptions', name: 'Subscriptions', type: 'expense', icon: 'Repeat', color: '#0EA5E9' },
+  { id: 'cat-health', name: 'Health', type: 'expense', icon: 'Stethoscope', color: '#10B981' },
+  { id: 'cat-shopping', name: 'Shopping', type: 'expense', icon: 'ShoppingBag', color: '#EC4899' },
   { id: 'cat-charity', name: 'Charity & Giving', type: 'expense', icon: 'HeartHandshake', color: '#34C759', isCharity: true },
-  { id: 'cat-transfer', name: 'Pocket Transfer', type: 'expense', icon: 'ArrowLeftRight', color: '#8E8E93' },
+  { id: 'cat-uncategorized', name: 'Uncategorized', type: 'expense', icon: 'Tag', color: '#8E8E93' },
 ];
 
 export const INITIAL_CHARITY_PLEDGES: CharityPledge[] = [

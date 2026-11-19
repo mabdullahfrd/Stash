@@ -4,7 +4,7 @@
  */
 
 import React, { useRef } from 'react';
-import { useFinance } from '../../context/FinanceContext';
+import { useFinanceData, useFinanceUI } from '../../context/FinanceContext';
 import { CurrencyCode } from '../../types/finance';
 import { formatCurrency } from '../../utils/currencies';
 
@@ -14,6 +14,7 @@ interface HoldAmountProps {
   className?: string;
   prefix?: string;
   showSign?: boolean;
+  interactive?: boolean;
 }
 
 export const HoldAmount: React.FC<HoldAmountProps> = ({
@@ -22,15 +23,23 @@ export const HoldAmount: React.FC<HoldAmountProps> = ({
   className = '',
   prefix = '',
   showSign = false,
+  interactive = true,
 }) => {
-  const { activeCurrency, openHoldConvertModal } = useFinance();
+  const { activeCurrency } = useFinanceData();
+  const { openHoldConvertModal } = useFinanceUI();
   const targetCurrency = currency || activeCurrency;
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const formatted = `${prefix}${formatCurrency(amount, targetCurrency, { showSign })}`;
+
+  if (!interactive) {
+    return <span className={className}>{formatted}</span>;
+  }
 
   const handleStart = () => {
     timerRef.current = setTimeout(() => {
       openHoldConvertModal(amount, targetCurrency);
-    }, 450); // 450ms hold trigger
+    }, 450);
   };
 
   const handleEnd = () => {
@@ -46,7 +55,8 @@ export const HoldAmount: React.FC<HoldAmountProps> = ({
   };
 
   return (
-    <span
+    <button
+      type="button"
       onClick={handleClick}
       onTouchStart={handleStart}
       onTouchEnd={handleEnd}
@@ -54,10 +64,10 @@ export const HoldAmount: React.FC<HoldAmountProps> = ({
       onMouseUp={handleEnd}
       onMouseLeave={handleEnd}
       title="Tap or hold to convert to USD, EUR, KRW, PKR"
-      className={`cursor-pointer active:scale-95 transition-transform select-none ${className}`}
+      aria-label={`Convert ${formatted} across currencies`}
+      className={`inline text-left cursor-pointer active:scale-95 transition-transform select-none ${className}`}
     >
-      {prefix}
-      {formatCurrency(amount, targetCurrency, { showSign })}
-    </span>
+      {formatted}
+    </button>
   );
 };

@@ -52,6 +52,15 @@ export const CURRENCY_REGISTRY: Record<CurrencyCode, CurrencyMeta> = {
   },
 };
 
+export function roundCurrencyAmount(
+  amount: number,
+  currency: CurrencyCode = 'KRW'
+): number {
+  const decimals = CURRENCY_REGISTRY[currency]?.decimals ?? 2;
+  if (!Number.isFinite(amount)) return 0;
+  return decimals === 0 ? Math.round(amount) : Number(amount.toFixed(decimals));
+}
+
 /**
  * Converts an amount from one currency to another using the exchange rates table
  */
@@ -70,8 +79,7 @@ export function convertCurrency(
   const inUSD = amount / fromRate;
   const target = inUSD * toRate;
   
-  const decimals = CURRENCY_REGISTRY[to]?.decimals ?? 2;
-  return decimals === 0 ? Math.round(target) : Number(target.toFixed(decimals));
+  return roundCurrencyAmount(target, to);
 }
 
 /**

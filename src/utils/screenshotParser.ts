@@ -3,8 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Account, Category, TransactionType } from '../types/finance';
-import { inferCategoryForItem } from './autoCategorize';
+import { Account, Category, CurrencyCode, Transaction, TransactionType } from '../types/finance';
+import { getFallbackCategory, inferCategoryForItem } from './autoCategorize';
+import { roundCurrencyAmount } from './currencies';
+import { isValidDateString, localDateString } from './dates';
+import { generateId } from './storage';
 
 export interface RawBankScreenshotEntry {
   merchant: string;
@@ -25,7 +28,12 @@ export interface ParsedBankScreenshotItem {
   categoryName: string;
   notes?: string;
   isCharity: boolean;
+  isDuplicate: boolean;
   selected: boolean;
+}
+
+export function normalizeMerchantKey(value: string | undefined): string {
+  return (value || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 export function detectBankAccountFromHint(
@@ -60,24 +68,58 @@ export function detectBankAccountFromHint(
   return accounts[0].id;
 }
 
+export function markDuplicateParsedEntries(
+  entries: ParsedBankScreenshotItem[],
+  accountId: string,
+  existingTransactions: Transaction[]
+): ParsedBankScreenshotItem[] {
+  if (!accountId || existingTransactions.length === 0) {
+    return entries.map((e) => ({ ...e, isDuplicate: false }));
+  }
+
+  const existingKeys = new Set(
+    existingTransactions
+      .filter((tx) => tx.accountId === accountId)
+      .map(
+        (tx) =>
+          `${tx.accountId}::${tx.date}::${tx.amount}::${normalizeMerchantKey(tx.merchant)}`
+      )
+  );
+
+  return entries.map((entry) => {
+    const key = `${accountId}::${entry.date}::${entry.amount}::${normalizeMerchantKey(
+      entry.merchant
+    )}`;
+    const isDuplicate = existingKeys.has(key);
+    return {
+      ...entry,
+      isDuplicate,
+      selected: isDuplicate ? false : entry.selected,
+    };
+  });
+}
+
 export function normalizeParsedBankEntries(
   rawEntries: RawBankScreenshotEntry[],
   categories: Category[],
-  fallbackDate?: string
+  fallbackDate?: string,
+  currency: CurrencyCode = 'KRW',
+  accountId: string = '',
+  existingTransactions: Transaction[] = []
 ): ParsedBankScreenshotItem[] {
-  const defaultDate = fallbackDate || new Date().toISOString().split('T')[0];
+  const defaultDate = fallbackDate || localDateString();
 
-  return rawEntries
-    .map((raw, idx): ParsedBankScreenshotItem | null => {
+  const normalized = rawEntries
+    .map((raw): ParsedBankScreenshotItem | null => {
       const cleanMerchant = (raw.merchant || '').trim();
-      const absAmount = Math.round(Math.abs(Number(raw.amount)));
+      const absAmount = roundCurrencyAmount(Math.abs(Number(raw.amount)), currency);
       if (!cleanMerchant || !Number.isFinite(absAmount) || absAmount <= 0) {
         return null;
       }
 
       const txType: 'expense' | 'income' = raw.type === 'income' ? 'income' : 'expense';
       const normalizedDate =
-        raw.date && /^\d{4}-\d{2}-\d{2}$/.test(raw.date.trim())
+        isValidDateString(raw.date)
           ? raw.date.trim()
           : defaultDate;
 
@@ -103,12 +145,11 @@ export function normalizeParsedBankEntries(
       }
 
       if (!matchedCategory) {
-        matchedCategory =
-          categories.find((c) => c.type === txType) || categories[0];
+        matchedCategory = getFallbackCategory(categories, txType);
       }
 
       const item: ParsedBankScreenshotItem = {
-        id: `toss-imp-${Date.now()}-${idx}`,
+        id: generateId('imp'),
         merchant: cleanMerchant,
         amount: absAmount,
         type: txType,
@@ -116,6 +157,7 @@ export function normalizeParsedBankEntries(
         categoryId: matchedCategory.id,
         categoryName: matchedCategory.name,
         isCharity: Boolean(matchedCategory.isCharity || inferred?.isCharity),
+        isDuplicate: false,
         selected: true,
       };
       if (raw.notes?.trim()) {
@@ -124,4 +166,6 @@ export function normalizeParsedBankEntries(
       return item;
     })
     .filter((item): item is ParsedBankScreenshotItem => item !== null);
+
+  return markDuplicateParsedEntries(normalized, accountId, existingTransactions);
 }

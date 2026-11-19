@@ -8,10 +8,16 @@ import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
 import {
   auth,
   signInWithGoogle,
+  consumeGoogleRedirectResult,
   registerWithEmail,
   loginWithEmail,
+  sendPasswordReset,
+  resendUserVerificationEmail,
+  reloadCurrentUser,
+  deleteUserAccountAndData,
   logoutUser,
   testConnection,
+  clearUserLocalStorageCache,
 } from '../services/firebase';
 import { formatFirebaseAuthError } from '../utils/firestoreSanitize';
 
@@ -27,6 +33,10 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<void>;
   signUpEmail: (email: string, pass: string, name: string) => Promise<void>;
   signInEmail: (email: string, pass: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  resendVerificationEmail: () => Promise<void>;
+  reloadUser: () => Promise<FirebaseUser | null>;
+  deleteAccountAndData: (password?: string) => Promise<void>;
   continueAsGuest: () => void;
   signOut: () => Promise<void>;
   authError: string | null;
@@ -40,7 +50,9 @@ const GUEST_KEY = 'stash_guest_mode_active';
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -53,17 +65,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   useEffect(() => {
-    // Monitor online/offline status
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Initial connection test
-    testConnection().catch(() => {});
+    consumeGoogleRedirectResult().catch((err) => {
+      setAuthError(formatFirebaseAuthError(err, 'Google redirect sign-in failed.'));
+    });
 
-    // Listen to Firebase Auth state
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -72,6 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           localStorage.removeItem(GUEST_KEY);
         } catch {}
+        testConnection().catch(() => {});
       }
       setLoading(false);
     });
@@ -86,12 +98,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleLoginGoogle = async () => {
     setAuthError(null);
     try {
-      await signInWithGoogle();
-      setIsGuest(false);
-      try {
-        localStorage.removeItem(GUEST_KEY);
-      } catch {}
-      setAuthModalOpen(false);
+      const result = await signInWithGoogle();
+      if (result) {
+        setIsGuest(false);
+        try {
+          localStorage.removeItem(GUEST_KEY);
+        } catch {}
+        setAuthModalOpen(false);
+      }
     } catch (err: unknown) {
       setAuthError(formatFirebaseAuthError(err, 'Failed to sign in with Google.'));
       throw err;
@@ -128,6 +142,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const handleResetPassword = async (email: string) => {
+    setAuthError(null);
+    try {
+      await sendPasswordReset(email);
+    } catch (err: unknown) {
+      setAuthError(formatFirebaseAuthError(err, 'Failed to send password reset email.'));
+      throw err;
+    }
+  };
+
+  const handleResendVerificationEmail = async () => {
+    setAuthError(null);
+    try {
+      await resendUserVerificationEmail();
+    } catch (err: unknown) {
+      setAuthError(formatFirebaseAuthError(err, 'Could not resend verification email.'));
+      throw err;
+    }
+  };
+
+  const handleReloadUser = async () => {
+    const refreshed = await reloadCurrentUser();
+    if (refreshed) {
+      // Trigger React re-render with updated emailVerified flag
+      setUser({ ...refreshed } as FirebaseUser);
+    }
+    return refreshed;
+  };
+
+  const handleDeleteAccountAndData = async (password?: string) => {
+    setAuthError(null);
+    try {
+      await deleteUserAccountAndData(password);
+      setUser(null);
+      setIsGuest(false);
+      try {
+        localStorage.removeItem(GUEST_KEY);
+      } catch {}
+    } catch (err: unknown) {
+      const formatted = formatFirebaseAuthError(err, 'Failed to delete account.');
+      setAuthError(formatted);
+      throw new Error(formatted);
+    }
+  };
+
   const continueAsGuest = () => {
     setIsGuest(true);
     try {
@@ -137,6 +196,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const handleSignOut = async () => {
+    const uid = user?.uid;
     try {
       await logoutUser();
     } catch (err) {
@@ -144,6 +204,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setUser(null);
       setIsGuest(false);
+      clearUserLocalStorageCache(uid);
+      clearUserLocalStorageCache();
       try {
         localStorage.removeItem(GUEST_KEY);
       } catch {}
@@ -169,6 +231,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithGoogle: handleLoginGoogle,
         signUpEmail: handleSignUpEmail,
         signInEmail: handleSignInEmail,
+        resetPassword: handleResetPassword,
+        resendVerificationEmail: handleResendVerificationEmail,
+        reloadUser: handleReloadUser,
+        deleteAccountAndData: handleDeleteAccountAndData,
         continueAsGuest,
         signOut: handleSignOut,
         authError,

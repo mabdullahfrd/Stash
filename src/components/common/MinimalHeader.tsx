@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { useFinance } from '../../context/FinanceContext';
+import { useFinanceData, useFinanceUI } from '../../context/FinanceContext';
 import { useAuth } from '../../context/AuthContext';
 import { Moon, Sun, SlidersHorizontal } from 'lucide-react';
 import { CURRENCY_REGISTRY } from '../../utils/currencies';
@@ -12,14 +12,8 @@ import { StashLogo } from './StashLogo';
 import { PWAInstallButton } from './PWAInstallButton';
 
 export const MinimalHeader: React.FC = () => {
-  const {
-    activeCurrency,
-    theme,
-    setTheme,
-    openSettingsModal,
-    openHoldConvertModal,
-    netWorth,
-  } = useFinance();
+  const { activeCurrency, netWorth } = useFinanceData();
+  const { theme, setTheme, openSettingsModal, openHoldConvertModal } = useFinanceUI();
 
   const { user, isGuest } = useAuth();
   const displayName = user?.displayName || (isGuest ? 'Abdullah' : 'Personal');
@@ -45,6 +39,7 @@ export const MinimalHeader: React.FC = () => {
       <div className="flex items-center gap-1.5 shrink-0">
         <PWAInstallButton variant="compact" />
         <button
+          type="button"
           onClick={() => openHoldConvertModal(netWorth.netWorth, activeCurrency)}
           className="h-9 px-3 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] hover:bg-black/[0.02] dark:hover:bg-white/[0.04] transition tabular-nums flex items-center gap-1.5"
           title="Switch or convert currency"
@@ -56,6 +51,7 @@ export const MinimalHeader: React.FC = () => {
         </button>
 
         <button
+          type="button"
           onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
           className="w-9 h-9 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-[#5E655A] dark:text-[#A4AC9E] hover:text-[#111315] dark:hover:text-white transition flex items-center justify-center"
           aria-label="Toggle theme"
@@ -65,6 +61,7 @@ export const MinimalHeader: React.FC = () => {
         </button>
 
         <button
+          type="button"
           onClick={openSettingsModal}
           className="w-9 h-9 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-[#5E655A] dark:text-[#A4AC9E] hover:text-[#111315] dark:hover:text-white transition flex items-center justify-center"
           aria-label="Settings"

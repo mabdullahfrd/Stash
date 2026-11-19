@@ -4,7 +4,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { useFinance } from '../../context/FinanceContext';
+import { useFinanceData, useFinanceUI } from '../../context/FinanceContext';
 import {
   Plus,
   ArrowUpRight,
@@ -14,6 +14,8 @@ import {
   X,
   Heart,
   Trash2,
+  Pencil,
+  CheckCircle2,
 } from 'lucide-react';
 import { HoldAmount } from '../common/HoldAmount';
 import { MinimalHeader } from '../common/MinimalHeader';
@@ -22,6 +24,8 @@ import { TransactionIcon } from '../common/TransactionIcon';
 import { formatCurrency, convertCurrency } from '../../utils/currencies';
 import { findBankPreset } from '../../utils/koreanBanks';
 import { AnalyticsTimeRange, computeItemTypeAnalytics } from '../../utils/itemAnalytics';
+import { ConfirmDialog } from '../common/ConfirmDialog';
+import { Account, CharityPledge, CurrencyCode } from '../../types/finance';
 
 export const PocketsView: React.FC = () => {
   const {
@@ -31,20 +35,46 @@ export const PocketsView: React.FC = () => {
     accountBalances,
     transactions,
     categories,
+    charityPledges,
     activeCurrency,
     rates,
+    deleteAccount,
+    addCharityPledge,
+    fulfillCharityPledge,
+    deleteCharityPledge,
+  } = useFinanceData();
+  const {
     selectedBankFilter,
     setSelectedBankFilter,
     openTransactionModal,
     openAccountModal,
-    deleteAccount,
+    openEditAccountModal,
     setActiveTab,
-  } = useFinance();
+  } = useFinanceUI();
 
   const [viewMode, setViewMode] = useState<'overview' | 'analytics'>('overview');
   const [timeRange, setTimeRange] = useState<AnalyticsTimeRange>('all');
   const [analyticsBankFilter, setAnalyticsBankFilter] = useState<string | null>(null);
   const [selectedItemCategoryFilter, setSelectedItemCategoryFilter] = useState<string | null>(null);
+  const [accountPendingDelete, setAccountPendingDelete] = useState<{ account: Account; txCount: number } | null>(null);
+
+  // Charity Pledge UI state
+  const [isNewPledgeOpen, setIsNewPledgeOpen] = useState(false);
+  const [newPledgeTitle, setNewPledgeTitle] = useState('');
+  const [newPledgeCause, setNewPledgeCause] = useState('Zakat');
+  const [newPledgeAmount, setNewPledgeAmount] = useState('');
+  const [newPledgeCurrency, setNewPledgeCurrency] = useState<CurrencyCode>(activeCurrency);
+  const [newPledgeDueDate, setNewPledgeDueDate] = useState('');
+  const [newPledgeError, setNewPledgeError] = useState('');
+
+  const [fulfillingPledge, setFulfillingPledge] = useState<CharityPledge | null>(null);
+  const [fulfillAmount, setFulfillAmount] = useState('');
+  const [fulfillAccountId, setFulfillAccountId] = useState('');
+  const [fulfillNotes, setFulfillNotes] = useState('');
+  const [fulfillError, setFulfillError] = useState('');
+  const [pledgePendingDelete, setPledgePendingDelete] = useState<CharityPledge | null>(null);
+
+  const activeAccounts = useMemo(() => accounts.filter((a) => !a.isArchived), [accounts]);
 
   const weeklyChartData = useMemo(() => {
     const days = [
@@ -94,7 +124,7 @@ export const PocketsView: React.FC = () => {
   const recentTransactions = filteredTransactions.slice(0, 6);
 
   const bankActivity = useMemo(() => {
-    return accounts.map((acc) => {
+    return activeAccounts.map((acc) => {
       const bankPreset = findBankPreset(acc.institution || acc.name);
       const spent = transactions
         .filter((t) => t.type === 'expense' && t.accountId === acc.id)
@@ -112,10 +142,10 @@ export const PocketsView: React.FC = () => {
         txCount,
       };
     });
-  }, [accounts, transactions, activeCurrency, rates]);
+  }, [activeAccounts, transactions, activeCurrency, rates]);
 
-  const selectedFilteredAccount = accounts.find((a) => a.id === selectedBankFilter);
-  const primaryAccount = accounts[0];
+  const selectedFilteredAccount = activeAccounts.find((a) => a.id === selectedBankFilter);
+  const primaryAccount = activeAccounts[0];
   const expenseCount = transactions.filter((t) => t.type === 'expense').length;
 
   return (
@@ -165,10 +195,10 @@ export const PocketsView: React.FC = () => {
                   </span>
                   <span
                     className={`inline-flex items-center gap-1 text-[11px] font-semibold ${
-                      accounts.length === 0 ? 'text-white/50' : 'text-[#C8EC45]'
+                      activeAccounts.length === 0 ? 'text-white/50' : 'text-[#C8EC45]'
                     }`}
                   >
-                    {accounts.length === 0
+                    {activeAccounts.length === 0
                       ? 'Ready to link'
                       : `${transactions.length} ${transactions.length === 1 ? 'entry' : 'entries'} logged`}
                   </span>
@@ -179,7 +209,7 @@ export const PocketsView: React.FC = () => {
                     <HoldAmount amount={netWorth.netWorth} currency={activeCurrency} />
                   </div>
                   <div className="flex items-center gap-2 text-[11px] text-white/50 font-mono mt-2">
-                    {accounts.length === 0 ? (
+                    {activeAccounts.length === 0 ? (
                       <>
                         <span>No bank accounts linked</span>
                         <span>·</span>
@@ -194,7 +224,7 @@ export const PocketsView: React.FC = () => {
                           </>
                         )}
                         <span>
-                          {accounts.length} {accounts.length === 1 ? 'linked account' : 'linked accounts'}
+                          {activeAccounts.length} {activeAccounts.length === 1 ? 'linked account' : 'linked accounts'}
                         </span>
                         <span>·</span>
                         <span>{activeCurrency}</span>
@@ -263,12 +293,12 @@ export const PocketsView: React.FC = () => {
                       Bank Accounts
                     </h2>
                     <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689] mt-0.5">
-                      {accounts.length === 0
+                      {activeAccounts.length === 0
                         ? 'Link your own bank accounts to begin tracking balances and spending'
                         : 'Select an account to view its activity or add an entry'}
                     </p>
                   </div>
-                  {accounts.length > 0 && (
+                  {activeAccounts.length > 0 && (
                     <button
                       onClick={() => openAccountModal()}
                       className="px-3 py-1.5 rounded-xl bg-[#F4F5F0] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] transition flex items-center gap-1 whitespace-nowrap shrink-0"
@@ -279,7 +309,7 @@ export const PocketsView: React.FC = () => {
                   )}
                 </div>
 
-                {accounts.length === 0 ? (
+                {activeAccounts.length === 0 ? (
                   <div className="rounded-2xl bg-[#F9FAF7] dark:bg-[#121511] border border-dashed border-black/[0.12] dark:border-white/[0.12] p-5 text-center space-y-4">
                     <div className="w-11 h-11 rounded-2xl bg-[#141617] dark:bg-[#C8EC45] text-[#C8EC45] dark:text-[#111315] flex items-center justify-center mx-auto">
                       <Building2 className="w-5 h-5 stroke-[1.8]" />
@@ -321,7 +351,7 @@ export const PocketsView: React.FC = () => {
                   </div>
                 ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {accounts.map((acc) => {
+                  {activeAccounts.map((acc) => {
                     const balance = accountBalances[acc.id] ?? acc.balance;
                     const bankInfo = findBankPreset(acc.institution || acc.name);
                     const isFiltered = selectedBankFilter === acc.id;
@@ -329,23 +359,19 @@ export const PocketsView: React.FC = () => {
                     return (
                       <div
                         key={acc.id}
-                        onClick={() => setSelectedBankFilter(isFiltered ? null : acc.id)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setSelectedBankFilter(isFiltered ? null : acc.id);
-                          }
-                        }}
-                        className={`p-3.5 rounded-2xl border text-left transition flex flex-col justify-between gap-3 cursor-pointer ${
+                        className={`relative p-3.5 rounded-2xl border text-left transition flex flex-col justify-between gap-3 ${
                           isFiltered
                             ? 'bg-[#F9FAF6] dark:bg-[#1E231C] border-[#141617] dark:border-[#C8EC45]'
                             : 'bg-[#F9FAF7] dark:bg-[#121511] border-black/[0.06] dark:border-white/[0.06] hover:border-black/[0.16] dark:hover:border-white/[0.16]'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2 w-full">
-                          <div className="flex items-center gap-2.5 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBankFilter(isFiltered ? null : acc.id)}
+                            aria-pressed={isFiltered}
+                            className="flex items-center gap-2.5 min-w-0 flex-1 text-left focus:outline-none"
+                          >
                             <BankLogo bank={bankInfo} size="md" />
                             <div className="min-w-0">
                               <span className="text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] block truncate">
@@ -355,14 +381,11 @@ export const PocketsView: React.FC = () => {
                                 {acc.accountNumber || bankInfo.name}
                               </span>
                             </div>
-                          </div>
+                          </button>
 
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openTransactionModal({ type: 'expense', accountId: acc.id });
-                            }}
+                            onClick={() => openTransactionModal({ type: 'expense', accountId: acc.id })}
                             title={`Add entry to ${acc.name}`}
                             aria-label={`Add entry to ${acc.name}`}
                             className="w-7 h-7 rounded-lg bg-white dark:bg-white/[0.06] border border-black/[0.07] dark:border-white/[0.08] flex items-center justify-center text-[#111315] dark:text-[#F4F5F0] hover:bg-[#C8EC45] hover:text-[#111315] hover:border-transparent transition shrink-0"
@@ -371,9 +394,13 @@ export const PocketsView: React.FC = () => {
                           </button>
                         </div>
 
-                        <div className="flex items-baseline justify-between w-full pt-2 border-t border-black/[0.05] dark:border-white/[0.06]">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedBankFilter(isFiltered ? null : acc.id)}
+                          className="flex items-baseline justify-between w-full pt-2 border-t border-black/[0.05] dark:border-white/[0.06] text-left focus:outline-none"
+                        >
                           <span className="text-sm font-bold font-mono text-[#111315] dark:text-[#F4F5F0] tabular-nums">
-                            <HoldAmount amount={balance} currency={acc.currency} />
+                            <HoldAmount amount={balance} currency={acc.currency} interactive={false} />
                           </span>
                           <span
                             className={`text-[10px] font-semibold ${
@@ -384,7 +411,7 @@ export const PocketsView: React.FC = () => {
                           >
                             {isFiltered ? 'Selected' : acc.currency}
                           </span>
-                        </div>
+                        </button>
                       </div>
                     );
                   })}
@@ -415,9 +442,20 @@ export const PocketsView: React.FC = () => {
                       </button>
                       <button
                         type="button"
+                        onClick={() => openEditAccountModal(selectedFilteredAccount)}
+                        className="p-1 rounded-lg text-[#6B7268] dark:text-[#A4AC9E] hover:text-[#111315] dark:hover:text-white transition"
+                        aria-label={`Edit ${selectedFilteredAccount.name}`}
+                        title="Edit account"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => {
-                          deleteAccount(selectedFilteredAccount.id);
-                          setSelectedBankFilter(null);
+                          const txCount = transactions.filter(
+                            (t) => t.accountId === selectedFilteredAccount.id || t.toAccountId === selectedFilteredAccount.id
+                          ).length;
+                          setAccountPendingDelete({ account: selectedFilteredAccount, txCount });
                         }}
                         className="p-1 rounded-lg text-[#8E9689] hover:text-rose-500 transition"
                         aria-label={`Remove ${selectedFilteredAccount.name}`}
@@ -532,10 +570,11 @@ export const PocketsView: React.FC = () => {
                       const bankInfo = account ? findBankPreset(account.institution || account.name) : null;
 
                       return (
-                        <div
+                        <button
                           key={tx.id}
+                          type="button"
                           onClick={() => openTransactionModal(tx)}
-                          className="py-3 flex items-center justify-between gap-3 cursor-pointer hover:opacity-80 transition"
+                          className="w-full py-3 flex items-center justify-between gap-3 text-left hover:opacity-80 transition"
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             <TransactionIcon
@@ -582,9 +621,320 @@ export const PocketsView: React.FC = () => {
                                 currency={tx.currency}
                                 showSign={isIncome}
                                 prefix={isIncome ? '' : '-'}
+                                interactive={false}
                               />
                             </span>
                           </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Charity Pledges Card */}
+              <div className="rounded-[24px] bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] p-5 space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-sm font-bold tracking-tight text-[#111315] dark:text-[#F4F5F0]">
+                      Charity Pledges
+                    </h2>
+                    <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689] mt-0.5">
+                      Track Zakat, Sadaqah, and giving goals
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewPledgeTitle('');
+                      setNewPledgeCause('Zakat');
+                      setNewPledgeAmount('');
+                      setNewPledgeCurrency(activeCurrency);
+                      setNewPledgeDueDate('');
+                      setNewPledgeError('');
+                      setIsNewPledgeOpen((v) => !v);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-[#F4F5F0] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] transition flex items-center gap-1 shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>New Pledge</span>
+                  </button>
+                </div>
+
+                {isNewPledgeOpen && (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const amt = parseFloat(newPledgeAmount);
+                      if (!newPledgeTitle.trim()) {
+                        setNewPledgeError('Enter a pledge title.');
+                        return;
+                      }
+                      if (!Number.isFinite(amt) || amt <= 0) {
+                        setNewPledgeError('Enter an amount greater than 0.');
+                        return;
+                      }
+                      await addCharityPledge({
+                        title: newPledgeTitle.trim(),
+                        cause: newPledgeCause.trim() || 'Charity',
+                        pledgedAmount: amt,
+                        currency: newPledgeCurrency,
+                        dueDate: newPledgeDueDate || undefined,
+                      });
+                      setIsNewPledgeOpen(false);
+                    }}
+                    className="p-3.5 rounded-2xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-black/[0.06] dark:border-white/[0.08] space-y-2.5 text-xs"
+                  >
+                    {newPledgeError && (
+                      <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+                        {newPledgeError}
+                      </p>
+                    )}
+                    <div>
+                      <label htmlFor="new-pledge-title" className="sr-only">
+                        Pledge title
+                      </label>
+                      <input
+                        id="new-pledge-title"
+                        type="text"
+                        value={newPledgeTitle}
+                        onChange={(e) => setNewPledgeTitle(e.target.value)}
+                        placeholder="Pledge title (e.g. Monthly Zakat)"
+                        className="w-full px-3 py-2 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label htmlFor="new-pledge-cause" className="sr-only">
+                          Cause
+                        </label>
+                        <input
+                          id="new-pledge-cause"
+                          type="text"
+                          value={newPledgeCause}
+                          onChange={(e) => setNewPledgeCause(e.target.value)}
+                          placeholder="Cause"
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="new-pledge-amount" className="sr-only">
+                          Target amount
+                        </label>
+                        <input
+                          id="new-pledge-amount"
+                          type="number"
+                          step="any"
+                          value={newPledgeAmount}
+                          onChange={(e) => setNewPledgeAmount(e.target.value)}
+                          placeholder="Target"
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] font-mono text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="new-pledge-currency" className="sr-only">
+                          Currency
+                        </label>
+                        <select
+                          id="new-pledge-currency"
+                          value={newPledgeCurrency}
+                          onChange={(e) => setNewPledgeCurrency(e.target.value as CurrencyCode)}
+                          className="w-full px-2 py-2 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                        >
+                          <option value="KRW">KRW</option>
+                          <option value="USD">USD</option>
+                          <option value="EUR">EUR</option>
+                          <option value="PKR">PKR</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <label htmlFor="new-pledge-due-date" className="sr-only">
+                          Due date
+                        </label>
+                        <input
+                          id="new-pledge-due-date"
+                          type="date"
+                          value={newPledgeDueDate}
+                          onChange={(e) => setNewPledgeDueDate(e.target.value)}
+                          className="px-3 py-1.5 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsNewPledgeOpen(false)}
+                          className="px-3 py-1.5 rounded-lg text-[#6B7268] dark:text-[#8E9689] font-medium"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-3.5 py-1.5 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] font-semibold"
+                        >
+                          Save Pledge
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                )}
+
+                {charityPledges.length === 0 ? (
+                  <p className="text-xs text-[#8E9689] py-4 text-center">
+                    No charity pledges yet. Create one to track giving progress.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {charityPledges.map((pledge) => {
+                      const pct = Math.min(
+                        100,
+                        pledge.pledgedAmount > 0
+                          ? Math.round((pledge.fulfilledAmount / pledge.pledgedAmount) * 100)
+                          : 0
+                      );
+                      const isFulfilled =
+                        pledge.status === 'fulfilled' ||
+                        pledge.fulfilledAmount >= pledge.pledgedAmount;
+                      const isEditingFulfill = fulfillingPledge?.id === pledge.id;
+
+                      return (
+                        <div
+                          key={pledge.id}
+                          className="p-3.5 rounded-2xl bg-[#F9FAF7] dark:bg-[#121511] border border-black/[0.06] dark:border-white/[0.06] space-y-2.5"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] truncate">
+                                  {pledge.title}
+                                </span>
+                                {isFulfilled && (
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-[#C8EC45] shrink-0" />
+                                )}
+                              </div>
+                              <span className="text-[10px] text-[#6B7268] dark:text-[#8E9689]">
+                                {pledge.cause}
+                                {pledge.dueDate ? ` · Due ${pledge.dueDate}` : ''}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {!isFulfilled && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFulfillingPledge(isEditingFulfill ? null : pledge);
+                                    setFulfillAmount('');
+                                    setFulfillAccountId(activeAccounts[0]?.id || '');
+                                    setFulfillNotes('');
+                                    setFulfillError('');
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold"
+                                >
+                                  Fulfill
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setPledgePendingDelete(pledge)}
+                                aria-label={`Delete ${pledge.title}`}
+                                className="p-1 text-[#8E9689] hover:text-rose-500 transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[11px] font-mono tabular-nums">
+                              <span className="text-[#6B7268] dark:text-[#8E9689]">
+                                {formatCurrency(pledge.fulfilledAmount, pledge.currency)} /{' '}
+                                {formatCurrency(pledge.pledgedAmount, pledge.currency)}
+                              </span>
+                              <span className="font-semibold text-[#111315] dark:text-[#F4F5F0]">
+                                {pct}%
+                              </span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-black/[0.06] dark:bg-white/[0.08] overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-[#C8EC45]"
+                                style={{ width: `${Math.max(4, pct)}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {isEditingFulfill && (
+                            <form
+                              onSubmit={async (e) => {
+                                e.preventDefault();
+                                setFulfillError('');
+                                const amt = parseFloat(fulfillAmount);
+                                const res = await fulfillCharityPledge(
+                                  pledge.id,
+                                  amt,
+                                  fulfillAccountId,
+                                  fulfillNotes
+                                );
+                                if (!res.ok) {
+                                  setFulfillError(res.error || 'Unable to fulfill pledge.');
+                                  return;
+                                }
+                                setFulfillingPledge(null);
+                              }}
+                              className="pt-2 border-t border-black/[0.06] dark:border-white/[0.07] space-y-2 text-xs"
+                            >
+                              {fulfillError && (
+                                <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+                                  {fulfillError}
+                                </p>
+                              )}
+                              {activeAccounts.length === 0 ? (
+                                <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
+                                  Link a bank account first to fulfill this pledge.
+                                </p>
+                              ) : (
+                                <>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      value={fulfillAmount}
+                                      onChange={(e) => setFulfillAmount(e.target.value)}
+                                      placeholder="Amount"
+                                      className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] font-mono text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                                    />
+                                    <select
+                                      value={fulfillAccountId}
+                                      onChange={(e) => setFulfillAccountId(e.target.value)}
+                                      className="px-2 py-1.5 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                                    >
+                                      {activeAccounts.map((acc) => (
+                                        <option key={acc.id} value={acc.id}>
+                                          {acc.name} ({acc.currency})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <input
+                                      type="text"
+                                      value={fulfillNotes}
+                                      onChange={(e) => setFulfillNotes(e.target.value)}
+                                      placeholder="Optional notes"
+                                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                                    />
+                                    <button
+                                      type="submit"
+                                      className="px-3 py-1.5 rounded-lg bg-[#C8EC45] text-[#111315] font-semibold shrink-0"
+                                    >
+                                      Confirm
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </form>
+                          )}
                         </div>
                       );
                     })}
@@ -633,7 +983,7 @@ export const PocketsView: React.FC = () => {
                 >
                   All Banks
                 </button>
-                {accounts.map((acc) => {
+                {activeAccounts.map((acc) => {
                   const bankPreset = findBankPreset(acc.institution || acc.name);
                   const active = analyticsBankFilter === acc.id;
                   return (
@@ -812,7 +1162,7 @@ export const PocketsView: React.FC = () => {
                     Cash Flow by Bank
                   </h3>
                   <span className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
-                    {accounts.length} linked
+                    {activeAccounts.length} linked
                   </span>
                 </div>
 
@@ -909,6 +1259,68 @@ export const PocketsView: React.FC = () => {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={Boolean(accountPendingDelete)}
+        title={
+          accountPendingDelete
+            ? `Remove ${accountPendingDelete.account.name}?`
+            : 'Remove account?'
+        }
+        description={
+          accountPendingDelete && accountPendingDelete.txCount > 0
+            ? `This account has ${accountPendingDelete.txCount} ${
+                accountPendingDelete.txCount === 1 ? 'transaction' : 'transactions'
+              }. You can archive the account to preserve your transaction history, or delete the account and all of its transactions.`
+            : 'This unlinks the bank account from your ledger.'
+        }
+        secondaryLabel={
+          accountPendingDelete && accountPendingDelete.txCount > 0
+            ? 'Archive account'
+            : undefined
+        }
+        onSecondaryAction={
+          accountPendingDelete && accountPendingDelete.txCount > 0
+            ? async () => {
+                const targetId = accountPendingDelete.account.id;
+                setAccountPendingDelete(null);
+                await deleteAccount(targetId, 'archive');
+                setSelectedBankFilter(null);
+              }
+            : undefined
+        }
+        confirmLabel={
+          accountPendingDelete && accountPendingDelete.txCount > 0
+            ? 'Delete account & transactions'
+            : 'Delete account'
+        }
+        onConfirm={async () => {
+          if (!accountPendingDelete) return;
+          const targetId = accountPendingDelete.account.id;
+          setAccountPendingDelete(null);
+          await deleteAccount(targetId, 'deleteWithTransactions');
+          setSelectedBankFilter(null);
+        }}
+        onCancel={() => setAccountPendingDelete(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(pledgePendingDelete)}
+        title={
+          pledgePendingDelete
+            ? `Delete "${pledgePendingDelete.title}"?`
+            : 'Delete charity pledge?'
+        }
+        description="Existing fulfilled charity transactions remain in your transaction history, while the pledge tracker is removed."
+        confirmLabel="Delete pledge"
+        onConfirm={async () => {
+          if (!pledgePendingDelete) return;
+          const id = pledgePendingDelete.id;
+          setPledgePendingDelete(null);
+          await deleteCharityPledge(id);
+        }}
+        onCancel={() => setPledgePendingDelete(null)}
+      />
     </div>
   );
 };

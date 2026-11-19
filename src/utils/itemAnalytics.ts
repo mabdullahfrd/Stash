@@ -4,8 +4,9 @@
  */
 
 import { Category, CurrencyCode, ExchangeRates, Transaction } from '../types/finance';
-import { convertCurrency } from './currencies';
-import { inferCategoryForItem } from './autoCategorize';
+import { convertCurrency, roundCurrencyAmount } from './currencies';
+import { getFallbackCategory, inferCategoryForItem } from './autoCategorize';
+import { localDateString } from './dates';
 
 export type AnalyticsTimeRange = 'all' | 'month' | '7d';
 
@@ -106,7 +107,7 @@ export function computeItemTypeAnalytics(
   }
 ): ItemAnalyticsSummary {
   const timeRange = options?.timeRange || 'all';
-  const refDateStr = options?.referenceDate || new Date().toISOString().split('T')[0];
+  const refDateStr = options?.referenceDate || localDateString();
   const refDate = new Date(refDateStr);
   const currentMonthPrefix = refDateStr.slice(0, 7);
 
@@ -142,13 +143,17 @@ export function computeItemTypeAnalytics(
 
       for (const it of tx.receiptItems) {
         const cat = resolveCategoryForReceiptItem(it.name, it.category, tx.categoryId, categories);
-        const itemAmount = Math.round(convertCurrency(it.price, tx.currency, targetCurrency, rates) * scale);
+        const fallbackCat = getFallbackCategory(categories, 'expense');
+        const itemAmount = roundCurrencyAmount(
+          convertCurrency(it.price, tx.currency, targetCurrency, rates) * scale,
+          targetCurrency
+        );
         if (itemAmount <= 0) continue;
 
         rawEntries.push({
           itemName: it.name,
-          categoryId: cat?.id || tx.categoryId,
-          categoryName: cat?.name || it.category || 'Other',
+          categoryId: cat?.id || tx.categoryId || fallbackCat.id,
+          categoryName: cat?.name || it.category || fallbackCat.name,
           amount: itemAmount,
           accountId: tx.accountId,
           date: txDate,
@@ -156,10 +161,11 @@ export function computeItemTypeAnalytics(
       }
     } else {
       const cat = categories.find((c) => c.id === tx.categoryId);
+      const fallbackCat = getFallbackCategory(categories, 'expense');
       rawEntries.push({
         itemName: tx.merchant || cat?.name || 'Expense',
-        categoryId: tx.categoryId,
-        categoryName: cat?.name || 'Other',
+        categoryId: cat?.id || tx.categoryId || fallbackCat.id,
+        categoryName: cat?.name || fallbackCat.name,
         amount: txTotalConverted,
         accountId: tx.accountId,
         date: txDate,

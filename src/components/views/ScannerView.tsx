@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
-import { useFinance } from '../../context/FinanceContext';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useFinanceData, useFinanceUI, useGamification } from '../../context/FinanceContext';
+import { useAuth } from '../../context/AuthContext';
 import {
   Camera,
   CheckCircle2,
@@ -16,14 +17,19 @@ import {
   AlertCircle,
   Check,
 } from 'lucide-react';
-import { ReceiptItem } from '../../types/finance';
-import { formatCurrency } from '../../utils/currencies';
+import { CurrencyCode, ReceiptItem } from '../../types/finance';
+import { CURRENCY_REGISTRY, formatCurrency, roundCurrencyAmount } from '../../utils/currencies';
 import { MinimalHeader } from '../common/MinimalHeader';
 import { BankLogo } from '../common/BankLogo';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { findBankPreset } from '../../utils/koreanBanks';
-import { inferCategoryForItem } from '../../utils/autoCategorize';
+import { getFallbackCategory, inferCategoryForItem } from '../../utils/autoCategorize';
+import { isValidDateString, localDateString } from '../../utils/dates';
+import { resizeImageFileToDataUrl } from '../../utils/imageResize';
+import { generateId } from '../../utils/storage';
 import {
   detectBankAccountFromHint,
+  markDuplicateParsedEntries,
   normalizeParsedBankEntries,
   ParsedBankScreenshotItem,
   RawBankScreenshotEntry,
@@ -89,45 +95,67 @@ const SAMPLE_BANK_SCREENSHOTS: Array<{
   },
 ];
 
+const GEMINI_CONSENT_STORAGE_KEY = 'stash_gemini_upload_consent_v1';
+
 export const ScannerView: React.FC = () => {
   const {
     categories,
     accounts,
+    transactions,
     activeCurrency,
-    addTransaction,
     addBatchTransactions,
-    setActiveTab,
-    openAccountModal,
-  } = useFinance();
+  } = useFinanceData();
+  const { setActiveTab, openAccountModal } = useFinanceUI();
+  const { completeScannerQuest } = useGamification();
+
+  const { user, isGuest, openAuthModal } = useAuth();
+  const isGuestMode = !user && isGuest;
+
+  const activeAccounts = useMemo(() => accounts.filter((a) => !a.isArchived), [accounts]);
 
   const [importMode, setImportMode] = useState<'bank' | 'receipt'>('bank');
 
+  // One-time Gemini upload consent
+  const [hasGeminiConsent, setHasGeminiConsent] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(GEMINI_CONSENT_STORAGE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [consentDialogMode, setConsentDialogMode] = useState<'bank' | 'receipt' | null>(null);
+  const bankFileInputRef = useRef<HTMLInputElement | null>(null);
+  const receiptFileInputRef = useRef<HTMLInputElement | null>(null);
+
   // Shared bank selection
   const [selectedAccountId, setSelectedAccountId] = useState(() =>
-    detectBankAccountFromHint('toss', accounts)
+    detectBankAccountFromHint('toss', activeAccounts)
   );
 
   useEffect(() => {
-    if (!accounts.some((a) => a.id === selectedAccountId) && accounts[0]) {
-      setSelectedAccountId(accounts[0].id);
+    if (!activeAccounts.some((a) => a.id === selectedAccountId) && activeAccounts[0]) {
+      setSelectedAccountId(activeAccounts[0].id);
     }
-  }, [accounts, selectedAccountId]);
+  }, [activeAccounts, selectedAccountId]);
 
-  // Bank screenshot import state
+  // Bank screenshot import state (always starts EMPTY)
   const [isParsingScreenshot, setIsParsingScreenshot] = useState(false);
   const [screenshotError, setScreenshotError] = useState<string | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
-  const [detectedBankLabel, setDetectedBankLabel] = useState<string>('Toss Bank');
-  const [parsedEntries, setParsedEntries] = useState<ParsedBankScreenshotItem[]>(() =>
-    normalizeParsedBankEntries(SAMPLE_BANK_SCREENSHOTS[0].entries, categories)
-  );
+  const [detectedBankLabel, setDetectedBankLabel] = useState<string>('Awaiting screenshot');
+  const [parsedEntries, setParsedEntries] = useState<ParsedBankScreenshotItem[]>([]);
+  const [isBankSampleData, setIsBankSampleData] = useState(false);
   const [batchSuccessCount, setBatchSuccessCount] = useState<number | null>(null);
 
-  // Store receipt scanner state
+  // Store receipt scanner state (always starts EMPTY)
   const [isScanningReceipt, setIsScanningReceipt] = useState(false);
   const [receiptError, setReceiptError] = useState<string | null>(null);
-  const [merchant, setMerchant] = useState('Emart Everyday (이마트)');
-  const [items, setItems] = useState<ReceiptItem[]>(SAMPLE_RECEIPTS[0].items);
+  const [merchant, setMerchant] = useState('');
+  const [receiptDate, setReceiptDate] = useState<string>(() => localDateString());
+  const [scannedReceiptTotal, setScannedReceiptTotal] = useState<number | null>(null);
+  const [scannedReceiptCurrency, setScannedReceiptCurrency] = useState<CurrencyCode | null>(null);
+  const [items, setItems] = useState<ReceiptItem[]>([]);
+  const [isReceiptSampleData, setIsReceiptSampleData] = useState(false);
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [allotSuccess, setAllotSuccess] = useState(false);
   const [isAddingItem, setIsAddingItem] = useState(false);
@@ -135,31 +163,76 @@ export const ScannerView: React.FC = () => {
   const [newItemPrice, setNewItemPrice] = useState('');
   const [newItemCategory, setNewItemCategory] = useState('Groceries (Eggs, Bread, Milk)');
 
-  const selectedAccount = accounts.find((a) => a.id === selectedAccountId) || accounts[0];
+  const selectedAccount = activeAccounts.find((a) => a.id === selectedAccountId) || activeAccounts[0];
+
+  // Refresh duplicate markers whenever selected target account or ledger transactions change
+  useEffect(() => {
+    if (parsedEntries.length === 0) return;
+    setParsedEntries((prev) =>
+      markDuplicateParsedEntries(prev, selectedAccount?.id || '', transactions)
+    );
+  }, [selectedAccount?.id, transactions]);
+
+  const handleFileInputClick = (e: React.MouseEvent<HTMLInputElement>, mode: 'bank' | 'receipt') => {
+    if (user && !hasGeminiConsent) {
+      e.preventDefault();
+      setConsentDialogMode(mode);
+    }
+  };
 
   // --- Bank Screenshot Handlers ---
   const handleBankScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
 
     setIsParsingScreenshot(true);
     setScreenshotError(null);
     setBatchSuccessCount(null);
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const base64 = event.target?.result as string;
-      setScreenshotPreview(base64);
+    try {
+      const resizedBase64 = await resizeImageFileToDataUrl(file);
+      setScreenshotPreview(resizedBase64);
 
+      // Guest/Demo Mode returns sample results locally with no Gemini API call
+      if (!user) {
+        const sample = SAMPLE_BANK_SCREENSHOTS[0];
+        setDetectedBankLabel(sample.bankName);
+        const matchedId = detectBankAccountFromHint(sample.bankHint, activeAccounts);
+        const targetAcc = activeAccounts.find((a) => a.id === matchedId) || selectedAccount;
+        if (matchedId) setSelectedAccountId(matchedId);
+        setParsedEntries(
+          normalizeParsedBankEntries(
+            sample.entries,
+            categories,
+            localDateString(),
+            targetAcc?.currency || activeCurrency,
+            targetAcc?.id || '',
+            transactions
+          )
+        );
+        setIsBankSampleData(true);
+        completeScannerQuest();
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
       try {
+        const idToken = await user.getIdToken();
         const response = await fetch('/api/parse-bank-screenshot', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
           body: JSON.stringify({
-            imageBase64: base64,
+            imageBase64: resizedBase64,
             bankHint: 'auto',
             targetCurrency: activeCurrency,
+            today: localDateString(),
           }),
+          signal: controller.signal,
         });
 
         const data = await response.json();
@@ -168,36 +241,66 @@ export const ScannerView: React.FC = () => {
           return;
         }
 
-        const matchedAccountId = detectBankAccountFromHint(data.bankHint || data.bankName, accounts);
+        const matchedAccountId = detectBankAccountFromHint(data.bankHint || data.bankName, activeAccounts);
+        const targetAcc = activeAccounts.find((a) => a.id === matchedAccountId) || selectedAccount;
         if (matchedAccountId) {
           setSelectedAccountId(matchedAccountId);
         }
         setDetectedBankLabel(data.bankName || 'Toss Bank');
+        setIsBankSampleData(false);
 
-        const normalized = normalizeParsedBankEntries(data.entries || [], categories);
+        const normalized = normalizeParsedBankEntries(
+          data.entries || [],
+          categories,
+          localDateString(),
+          targetAcc?.currency || activeCurrency,
+          targetAcc?.id || '',
+          transactions
+        );
         if (normalized.length === 0) {
           setScreenshotError('No valid payment amounts were found in this screenshot.');
         } else {
           setParsedEntries(normalized);
+          completeScannerQuest();
         }
-      } catch (err) {
-        console.error('Bank screenshot upload error:', err);
-        setScreenshotError('Network error while reading screenshot. Please try again.');
       } finally {
-        setIsParsingScreenshot(false);
+        clearTimeout(timeoutId);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setScreenshotError('Screenshot scan timed out after 25s. Please try a clearer or smaller photo.');
+      } else {
+        setScreenshotError(
+          err instanceof Error && err.message
+            ? err.message
+            : 'Network error while reading screenshot. Please try again.'
+        );
+      }
+    } finally {
+      setIsParsingScreenshot(false);
+    }
   };
 
   const loadSampleBankScreenshot = (sample: (typeof SAMPLE_BANK_SCREENSHOTS)[0]) => {
+    if (!isGuestMode) return;
     setScreenshotError(null);
     setBatchSuccessCount(null);
     setScreenshotPreview(null);
     setDetectedBankLabel(sample.bankName);
-    const accId = detectBankAccountFromHint(sample.bankHint, accounts);
+    setIsBankSampleData(true);
+    const accId = detectBankAccountFromHint(sample.bankHint, activeAccounts);
+    const targetAcc = activeAccounts.find((a) => a.id === accId) || selectedAccount;
     if (accId) setSelectedAccountId(accId);
-    setParsedEntries(normalizeParsedBankEntries(sample.entries, categories));
+    setParsedEntries(
+      normalizeParsedBankEntries(
+        sample.entries,
+        categories,
+        localDateString(),
+        targetAcc?.currency || activeCurrency,
+        targetAcc?.id || '',
+        transactions
+      )
+    );
   };
 
   const toggleEntrySelected = (id: string) => {
@@ -224,7 +327,7 @@ export const ScannerView: React.FC = () => {
   };
 
   const updateEntryType = (id: string, nextType: 'expense' | 'income') => {
-    const fallbackCat = categories.find((c) => c.type === nextType) || categories[0];
+    const fallbackCat = getFallbackCategory(categories, nextType);
     setParsedEntries((prev) =>
       prev.map((entry) =>
         entry.id === id
@@ -250,7 +353,11 @@ export const ScannerView: React.FC = () => {
     .reduce((sum, e) => sum + e.amount, 0);
 
   const handleImportSelectedEntries = async () => {
-    if (selectedEntries.length === 0 || !selectedAccount) return;
+    if (selectedEntries.length === 0) return;
+    if (!selectedAccount) {
+      openAccountModal();
+      return;
+    }
 
     const payload = selectedEntries.map((entry) => ({
       type: entry.type,
@@ -272,7 +379,17 @@ export const ScannerView: React.FC = () => {
   };
 
   // --- Receipt Scanner Handlers ---
-  const calculateReceiptTotal = items.reduce((sum, item) => sum + item.price, 0);
+  const receiptCurrency: CurrencyCode = scannedReceiptCurrency || selectedAccount?.currency || activeCurrency;
+  const calculateReceiptTotal = roundCurrencyAmount(
+    items.reduce((sum, item) => sum + item.price, 0),
+    receiptCurrency
+  );
+  const receiptMismatchTolerance = (CURRENCY_REGISTRY[receiptCurrency]?.decimals ?? 2) === 0 ? 1 : 0.02;
+  const hasReceiptTotalMismatch =
+    items.length > 0 &&
+    scannedReceiptTotal !== null &&
+    scannedReceiptTotal > 0 &&
+    Math.abs(calculateReceiptTotal - scannedReceiptTotal) > receiptMismatchTolerance;
 
   const categoryBreakdown = items.reduce((acc, item) => {
     acc[item.category] = (acc[item.category] || 0) + item.price;
@@ -281,26 +398,48 @@ export const ScannerView: React.FC = () => {
 
   const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
 
     setIsScanningReceipt(true);
     setReceiptError(null);
     setAllotSuccess(false);
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const base64 = event.target?.result as string;
-      setReceiptImage(base64);
+    try {
+      const resizedBase64 = await resizeImageFileToDataUrl(file);
+      setReceiptImage(resizedBase64);
 
+      // Guest/Demo Mode returns sample results locally with no Gemini API call
+      if (!user) {
+        const sample = SAMPLE_RECEIPTS[0];
+        setMerchant(sample.merchant);
+        setReceiptDate(localDateString());
+        setScannedReceiptTotal(sample.items.reduce((sum, it) => sum + it.price, 0));
+        setScannedReceiptCurrency('KRW');
+        setItems(sample.items.map((it) => ({ ...it, id: generateId('sample') })));
+        setIsReceiptSampleData(true);
+        completeScannerQuest();
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
       try {
+        const today = localDateString();
+        const idToken = await user.getIdToken();
         const response = await fetch('/api/scan-receipt', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
           body: JSON.stringify({
-            imageBase64: base64,
+            imageBase64: resizedBase64,
             merchantHint: 'Store Receipt',
             targetCurrency: activeCurrency,
+            today,
           }),
+          signal: controller.signal,
         });
 
         const data = await response.json();
@@ -309,31 +448,60 @@ export const ScannerView: React.FC = () => {
           return;
         }
 
+        const respCurrency: CurrencyCode =
+          data.currency === 'USD' || data.currency === 'EUR' || data.currency === 'KRW' || data.currency === 'PKR'
+            ? data.currency
+            : activeCurrency;
+
+        setIsReceiptSampleData(false);
         if (data.merchant) setMerchant(data.merchant);
+        setReceiptDate(isValidDateString(data.date) ? data.date : today);
+        setScannedReceiptCurrency(respCurrency);
+        setScannedReceiptTotal(
+          typeof data.totalAmount === 'number' && Number.isFinite(data.totalAmount) && data.totalAmount > 0
+            ? roundCurrencyAmount(data.totalAmount, respCurrency)
+            : null
+        );
+
         if (data.items && Array.isArray(data.items) && data.items.length > 0) {
           setItems(
-            data.items.map((it: { name: string; price: number; category: string }, idx: number) => ({
-              id: `ai-${Date.now()}-${idx}`,
+            data.items.map((it: { name: string; price: number; category: string }) => ({
+              id: generateId('ai'),
               name: it.name,
-              price: Math.round(Math.abs(Number(it.price))) || 0,
-              category: it.category || 'Groceries (Eggs, Bread, Milk)',
+              price: roundCurrencyAmount(Math.abs(Number(it.price)) || 0, respCurrency),
+              category: it.category || 'Uncategorized',
             }))
           );
+          completeScannerQuest();
         }
-      } catch (err) {
-        console.error('Receipt scan error:', err);
-        setReceiptError('Network error while scanning receipt. Try again or load a sample receipt.');
       } finally {
-        setIsScanningReceipt(false);
+        clearTimeout(timeoutId);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setReceiptError('Receipt scan timed out after 25s. Try a clearer photo or add items manually.');
+      } else {
+        setReceiptError(
+          err instanceof Error && err.message
+            ? err.message
+            : 'Network error while scanning receipt. Please try again or add items manually.'
+        );
+      }
+    } finally {
+      setIsScanningReceipt(false);
+    }
   };
 
   const loadSampleReceipt = (sample: (typeof SAMPLE_RECEIPTS)[0]) => {
+    if (!isGuestMode) return;
     setReceiptError(null);
+    setReceiptImage(null);
     setMerchant(sample.merchant);
-    setItems(sample.items.map((it) => ({ ...it, id: `${it.id}-${Date.now()}` })));
+    setReceiptDate(localDateString());
+    setScannedReceiptTotal(sample.items.reduce((sum, it) => sum + it.price, 0));
+    setScannedReceiptCurrency('KRW');
+    setItems(sample.items.map((it) => ({ ...it, id: generateId('sample') })));
+    setIsReceiptSampleData(true);
     setAllotSuccess(false);
   };
 
@@ -344,12 +512,12 @@ export const ScannerView: React.FC = () => {
   const handleAddReceiptItem = () => {
     const trimmed = newItemName.trim();
     const parsedPrice = parseFloat(newItemPrice);
-    if (!trimmed || isNaN(parsedPrice) || parsedPrice <= 0) return;
+    if (!trimmed || !Number.isFinite(parsedPrice) || parsedPrice <= 0) return;
 
     const newItem: ReceiptItem = {
-      id: `manual-${Date.now()}`,
+      id: generateId('manual'),
       name: trimmed,
-      price: Math.round(parsedPrice),
+      price: roundCurrencyAmount(parsedPrice, receiptCurrency),
       category: newItemCategory,
     };
     setItems((prev) => [...prev, newItem]);
@@ -358,41 +526,42 @@ export const ScannerView: React.FC = () => {
     setIsAddingItem(false);
   };
 
-  const handleSaveAndAllotAll = () => {
-    if (items.length === 0) return;
+  const handleSaveAndAllotAll = async () => {
+    if (items.length === 0 || allotSuccess) return;
     if (!selectedAccount) {
       openAccountModal();
       return;
     }
-    const today = new Date().toISOString().split('T')[0];
+    const txDate = isValidDateString(receiptDate) ? receiptDate : localDateString();
 
-    Object.entries(categoryBreakdown).forEach(([catName, sumAmount]) => {
+    const batchPayload = Object.entries(categoryBreakdown).map(([catName, sumAmount]) => {
       const matchedCategory =
         categories.find(
           (c) =>
-            c.name.toLowerCase().includes(catName.toLowerCase()) ||
-            catName.toLowerCase().includes(c.name.toLowerCase())
-        ) || categories[0];
+            c.type === 'expense' &&
+            (c.name.toLowerCase().includes(catName.toLowerCase()) ||
+              catName.toLowerCase().includes(c.name.toLowerCase()))
+        ) || getFallbackCategory(categories, 'expense');
 
-      const itemNames = items
-        .filter((it) => it.category === catName)
-        .map((it) => `${it.name} (${formatCurrency(it.price, activeCurrency)})`)
+      const categoryItems = items.filter((it) => it.category === catName);
+      const itemNames = categoryItems
+        .map((it) => `${it.name} (${formatCurrency(it.price, receiptCurrency)})`)
         .join(', ');
 
-      addTransaction({
-        type: 'expense',
-        amount: Math.round(sumAmount),
-        currency: activeCurrency,
-        date: today,
+      return {
+        type: 'expense' as const,
+        amount: roundCurrencyAmount(sumAmount, receiptCurrency),
+        currency: receiptCurrency,
+        date: txDate,
         categoryId: matchedCategory.id,
-        accountId: selectedAccountId || accounts[0]?.id || '',
-        merchant,
+        accountId: selectedAccount.id,
+        merchant: merchant.trim() || 'Store Receipt',
         notes: `Allotted from scanned receipt: ${itemNames}`,
-        receiptItems: items.filter((it) => it.category === catName),
-        receiptUrl: receiptImage || undefined,
-      });
+        receiptItems: categoryItems,
+      };
     });
 
+    await addBatchTransactions(batchPayload);
     setAllotSuccess(true);
     setTimeout(() => {
       setActiveTab('pockets');
@@ -472,13 +641,29 @@ export const ScannerView: React.FC = () => {
                     </>
                   )}
                   <input
+                    ref={bankFileInputRef}
                     type="file"
                     accept="image/*"
+                    onClick={(e) => handleFileInputClick(e, 'bank')}
                     onChange={handleBankScreenshotUpload}
                     disabled={isParsingScreenshot}
                     className="hidden"
                   />
                 </label>
+
+                {isGuestMode && (
+                  <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
+                    Demo Mode previews sample data locally.{' '}
+                    <button
+                      type="button"
+                      onClick={openAuthModal}
+                      className="font-semibold text-[#111315] dark:text-[#C8EC45] underline"
+                    >
+                      Sign in
+                    </button>{' '}
+                    to scan real screenshots.
+                  </p>
+                )}
 
                 {screenshotPreview && (
                   <div className="pt-2">
@@ -498,24 +683,31 @@ export const ScannerView: React.FC = () => {
                 )}
               </div>
 
-              {/* Sample Bank History Presets */}
-              <div className="space-y-2">
-                <span className="text-[11px] font-semibold text-[#6B7268] dark:text-[#8E9689] block">
-                  Or load sample history
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {SAMPLE_BANK_SCREENSHOTS.map((sample, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => loadSampleBankScreenshot(sample)}
-                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-[#111315] dark:text-[#F4F5F0] text-xs font-medium hover:border-black/20 dark:hover:border-white/20 transition"
-                    >
-                      {sample.label}
-                    </button>
-                  ))}
+              {/* Sample Bank History Presets (Guest/Demo Mode only) */}
+              {isGuestMode && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-[#6B7268] dark:text-[#8E9689]">
+                      Or load sample history
+                    </span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300">
+                      Sample data
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {SAMPLE_BANK_SCREENSHOTS.map((sample, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => loadSampleBankScreenshot(sample)}
+                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-[#111315] dark:text-[#F4F5F0] text-xs font-medium hover:border-black/20 dark:hover:border-white/20 transition"
+                      >
+                        {sample.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Right: Review Extracted Rows & Batch Add */}
@@ -525,9 +717,16 @@ export const ScannerView: React.FC = () => {
                   <span className="text-[11px] font-medium text-[#6B7268] dark:text-[#8E9689] block">
                     Detected Source
                   </span>
-                  <span className="font-bold text-sm text-[#111315] dark:text-[#F4F5F0]">
-                    {detectedBankLabel} · {selectedEntries.length} selected
-                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-sm text-[#111315] dark:text-[#F4F5F0]">
+                      {detectedBankLabel} · {selectedEntries.length} selected
+                    </span>
+                    {isBankSampleData && parsedEntries.length > 0 && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300">
+                        Sample data
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="text-right shrink-0">
@@ -545,7 +744,7 @@ export const ScannerView: React.FC = () => {
                 <label className="text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] block">
                   Assign to Bank Account
                 </label>
-                {accounts.length === 0 ? (
+                {activeAccounts.length === 0 ? (
                   <div className="p-3.5 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-dashed border-black/[0.14] dark:border-white/[0.14] flex items-center justify-between gap-3">
                     <span className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
                       Link a bank account first to assign imported entries.
@@ -560,7 +759,7 @@ export const ScannerView: React.FC = () => {
                   </div>
                 ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  {accounts.map((acc) => {
+                  {activeAccounts.map((acc) => {
                     const isSelected = selectedAccountId === acc.id;
                     const bankInfo = findBankPreset(acc.institution || acc.name);
                     return (
@@ -598,7 +797,9 @@ export const ScannerView: React.FC = () => {
 
                 {parsedEntries.length === 0 ? (
                   <p className="text-xs text-[#8E9689] py-6 text-center border border-dashed border-black/10 dark:border-white/10 rounded-xl">
-                    Upload a screenshot or load a sample history to review items.
+                    {isGuestMode
+                      ? 'Upload a screenshot or load a sample history to review items.'
+                      : 'Upload a Toss or Hana screenshot to extract and review payment rows.'}
                   </p>
                 ) : (
                   <div className="divide-y divide-black/[0.05] dark:divide-white/[0.06] border border-black/[0.06] dark:border-white/[0.06] rounded-xl overflow-hidden bg-[#F9FAF7] dark:bg-[#121511]">
@@ -620,9 +821,16 @@ export const ScannerView: React.FC = () => {
                             </button>
 
                             <div className="min-w-0 flex-1">
-                              <span className="font-semibold text-xs text-[#111315] dark:text-[#F4F5F0] block truncate">
-                                {entry.merchant}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-semibold text-xs text-[#111315] dark:text-[#F4F5F0] truncate">
+                                  {entry.merchant}
+                                </span>
+                                {entry.isDuplicate && (
+                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 shrink-0">
+                                    Already imported
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[10px] font-mono text-[#6B7268] dark:text-[#8E9689]">
                                 {entry.date}
                                 {entry.notes ? ` · ${entry.notes}` : ''}
@@ -690,7 +898,7 @@ export const ScannerView: React.FC = () => {
               <button
                 type="button"
                 onClick={handleImportSelectedEntries}
-                disabled={selectedEntries.length === 0 || batchSuccessCount !== null}
+                disabled={selectedEntries.length === 0 || !selectedAccount || batchSuccessCount !== null}
                 className="w-full py-3.5 px-4 rounded-xl bg-[#C8EC45] hover:bg-[#B8DE35] text-[#111315] font-semibold text-xs transition flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {batchSuccessCount !== null ? (
@@ -743,14 +951,40 @@ export const ScannerView: React.FC = () => {
                     </>
                   )}
                   <input
+                    ref={receiptFileInputRef}
                     type="file"
                     accept="image/*"
                     capture="environment"
+                    onClick={(e) => handleFileInputClick(e, 'receipt')}
                     onChange={handleReceiptUpload}
                     disabled={isScanningReceipt}
                     className="hidden"
                   />
                 </label>
+
+                {isGuestMode && (
+                  <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
+                    Demo Mode previews sample data locally.{' '}
+                    <button
+                      type="button"
+                      onClick={openAuthModal}
+                      className="font-semibold text-[#111315] dark:text-[#C8EC45] underline"
+                    >
+                      Sign in
+                    </button>{' '}
+                    to scan real receipts.
+                  </p>
+                )}
+
+                {receiptImage && (
+                  <div className="pt-2">
+                    <img
+                      src={receiptImage}
+                      alt="Uploaded store receipt preview"
+                      className="w-full max-h-48 object-contain rounded-xl border border-black/[0.06] dark:border-white/[0.08] bg-[#F4F5F0] dark:bg-[#0D0F0C]"
+                    />
+                  </div>
+                )}
 
                 {receiptError && (
                   <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-xs flex items-start gap-2 text-left border border-rose-200/70 dark:border-rose-900/40">
@@ -760,24 +994,31 @@ export const ScannerView: React.FC = () => {
                 )}
               </div>
 
-              {/* Sample Receipts */}
-              <div className="space-y-2">
-                <span className="text-[11px] font-semibold text-[#6B7268] dark:text-[#8E9689] block">
-                  Load sample receipt
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {SAMPLE_RECEIPTS.map((sample, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => loadSampleReceipt(sample)}
-                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-[#111315] dark:text-[#F4F5F0] text-xs font-medium hover:border-black/20 dark:hover:border-white/20 transition"
-                    >
-                      {sample.name}
-                    </button>
-                  ))}
+              {/* Sample Receipts (Guest/Demo Mode only) */}
+              {isGuestMode && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-[#6B7268] dark:text-[#8E9689]">
+                      Load sample receipt
+                    </span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300">
+                      Sample data
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {SAMPLE_RECEIPTS.map((sample, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => loadSampleReceipt(sample)}
+                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-[#111315] dark:text-[#F4F5F0] text-xs font-medium hover:border-black/20 dark:hover:border-white/20 transition"
+                      >
+                        {sample.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Right: Itemized Ledger & Allotment */}
@@ -785,26 +1026,48 @@ export const ScannerView: React.FC = () => {
               {/* Merchant & Live Total */}
               <div className="flex items-center justify-between gap-4 pb-4 border-b border-black/[0.06] dark:border-white/[0.07]">
                 <div className="flex-1 min-w-0">
-                  <span className="text-[11px] font-medium text-[#6B7268] dark:text-[#8E9689] block">
-                    Merchant
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="receipt-merchant"
+                      className="text-[11px] font-medium text-[#6B7268] dark:text-[#8E9689]"
+                    >
+                      Merchant
+                    </label>
+                    {isReceiptSampleData && items.length > 0 && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300">
+                        Sample data
+                      </span>
+                    )}
+                  </div>
                   <input
+                    id="receipt-merchant"
                     type="text"
                     value={merchant}
                     onChange={(e) => setMerchant(e.target.value)}
+                    placeholder="e.g. Emart Everyday"
                     className="w-full font-bold text-sm text-[#111315] dark:text-[#F4F5F0] bg-transparent border-b border-dashed border-black/15 dark:border-white/15 focus:outline-none py-0.5 mt-0.5"
                   />
                 </div>
 
                 <div className="text-right shrink-0">
                   <span className="text-[11px] font-medium text-[#6B7268] dark:text-[#8E9689] block">
-                    Total
+                    Total ({receiptDate})
                   </span>
                   <span className="font-mono font-bold text-lg text-[#111315] dark:text-[#F4F5F0] tabular-nums">
-                    {formatCurrency(calculateReceiptTotal, activeCurrency)}
+                    {formatCurrency(calculateReceiptTotal, receiptCurrency)}
                   </span>
                 </div>
               </div>
+
+              {hasReceiptTotalMismatch && scannedReceiptTotal !== null && (
+                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>
+                    Line items sum to {formatCurrency(calculateReceiptTotal, receiptCurrency)}, while the receipt header total reads{' '}
+                    {formatCurrency(scannedReceiptTotal, receiptCurrency)}. Review tax/discounts or edit items before allotting.
+                  </span>
+                </div>
+              )}
 
               {/* Bank Account Selector */}
               <div className="space-y-2">
@@ -812,7 +1075,7 @@ export const ScannerView: React.FC = () => {
                   Bank Account Used
                 </label>
 
-                {accounts.length === 0 ? (
+                {activeAccounts.length === 0 ? (
                   <div className="p-3.5 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-dashed border-black/[0.14] dark:border-white/[0.14] flex items-center justify-between gap-3">
                     <span className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
                       Link a bank account first before allotting receipt items.
@@ -827,7 +1090,7 @@ export const ScannerView: React.FC = () => {
                   </div>
                 ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  {accounts.map((acc) => {
+                  {activeAccounts.map((acc) => {
                     const isSelected = selectedAccountId === acc.id;
                     const bankInfo = findBankPreset(acc.institution || acc.name);
 
@@ -873,6 +1136,7 @@ export const ScannerView: React.FC = () => {
                   <div className="p-3 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-black/[0.08] dark:border-white/[0.08] space-y-2">
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                       <input
+                        aria-label="Item name"
                         type="text"
                         value={newItemName}
                         onChange={(e) => {
@@ -887,6 +1151,7 @@ export const ScannerView: React.FC = () => {
                         className="sm:col-span-6 px-3 py-2 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-xs text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
                       />
                       <input
+                        aria-label="Item price"
                         type="number"
                         step="any"
                         value={newItemPrice}
@@ -903,8 +1168,11 @@ export const ScannerView: React.FC = () => {
                       </button>
                     </div>
                     <div className="flex items-center justify-between gap-2 text-[11px]">
-                      <span className="text-[#6B7268] dark:text-[#8E9689]">Category (auto-matched):</span>
+                      <label htmlFor="new-item-category" className="text-[#6B7268] dark:text-[#8E9689]">
+                        Category (auto-matched):
+                      </label>
                       <select
+                        id="new-item-category"
                         value={newItemCategory}
                         onChange={(e) => setNewItemCategory(e.target.value)}
                         className="px-2 py-1 rounded-md bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[11px] font-medium text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
@@ -921,6 +1189,11 @@ export const ScannerView: React.FC = () => {
                   </div>
                 )}
 
+                {items.length === 0 ? (
+                  <p className="text-xs text-[#8E9689] py-6 text-center border border-dashed border-black/10 dark:border-white/10 rounded-xl">
+                    Upload a store receipt or click &ldquo;Add item&rdquo; to itemize purchases.
+                  </p>
+                ) : (
                 <div className="divide-y divide-black/[0.05] dark:divide-white/[0.06] border border-black/[0.06] dark:border-white/[0.06] rounded-xl overflow-hidden bg-[#F9FAF7] dark:bg-[#121511]">
                   {items.map((it) => (
                     <div key={it.id} className="px-3.5 py-2.5 flex items-center justify-between gap-2">
@@ -935,7 +1208,7 @@ export const ScannerView: React.FC = () => {
 
                       <div className="flex items-center gap-2.5 shrink-0">
                         <span className="font-mono font-semibold text-xs text-[#111315] dark:text-[#F4F5F0] tabular-nums">
-                          {formatCurrency(it.price, activeCurrency)}
+                          {formatCurrency(it.price, receiptCurrency)}
                         </span>
                         <button
                           type="button"
@@ -949,13 +1222,14 @@ export const ScannerView: React.FC = () => {
                     </div>
                   ))}
                 </div>
+                )}
               </div>
 
               {/* Confirm CTA */}
               <button
                 type="button"
                 onClick={handleSaveAndAllotAll}
-                disabled={items.length === 0}
+                disabled={items.length === 0 || !selectedAccount}
                 className="w-full py-3.5 px-4 rounded-xl bg-[#C8EC45] hover:bg-[#B8DE35] text-[#111315] font-semibold text-xs transition flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {allotSuccess ? (
@@ -974,6 +1248,27 @@ export const ScannerView: React.FC = () => {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={consentDialogMode !== null}
+        tone="neutral"
+        title="Image processing privacy notice"
+        description="To extract items, dates, and amounts, your uploaded receipt or bank screenshot image is sent securely over HTTPS to Google's Gemini API. Stash does not share this image with third parties."
+        confirmLabel="I understand, continue"
+        onConfirm={() => {
+          const targetMode = consentDialogMode;
+          setHasGeminiConsent(true);
+          try {
+            localStorage.setItem(GEMINI_CONSENT_STORAGE_KEY, 'true');
+          } catch {}
+          setConsentDialogMode(null);
+          setTimeout(() => {
+            if (targetMode === 'bank') bankFileInputRef.current?.click();
+            if (targetMode === 'receipt') receiptFileInputRef.current?.click();
+          }, 0);
+        }}
+        onCancel={() => setConsentDialogMode(null)}
+      />
     </div>
   );
 };

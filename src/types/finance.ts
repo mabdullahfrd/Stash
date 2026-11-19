@@ -5,72 +5,68 @@
 
 export type CurrencyCode = 'USD' | 'EUR' | 'KRW' | 'PKR';
 
-export type AccountType = 'checking' | 'savings' | 'cash' | 'credit';
-export type ThemeMode = 'light' | 'dark';
+export type TransactionType = 'income' | 'expense' | 'transfer';
+
+export type AccountType = 'checking' | 'savings' | 'credit' | 'cash';
+
+export interface ExchangeRates {
+  USD: number;
+  EUR: number;
+  KRW: number;
+  PKR: number;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  type: 'income' | 'expense';
+  icon: string;
+  color: string;
+  isCharity?: boolean;
+}
 
 export interface Account {
   id: string;
   name: string;
   type: AccountType;
   currency: CurrencyCode;
-  balance: number;
+  balance: number; // Opening/base balance
   creditLimit?: number;
-  institution: string;
-  accountNumber?: string; // e.g. "•••• 4921"
-  bankCode?: string; // e.g. "shinhan", "kakao", "toss"
-  color: string;
+  institution: string; // e.g., Shinhan Bank, KakaoBank, Hana Bank, Toss Bank
+  accountNumber?: string; // e.g., •••• 4921
+  bankCode?: string; // e.g., shinhan, kakao, toss, hana, kb, woori
   icon: string;
+  color: string;
   isArchived?: boolean;
 }
-
-export interface Budget {
-  id: string;
-  categoryId: string;
-  amount: number;
-  currency: CurrencyCode;
-  period: 'monthly' | 'weekly';
-  warningThresholdPercent: number;
-}
-
-export type TransactionType = 'income' | 'expense' | 'transfer';
 
 export interface ReceiptItem {
   id: string;
   name: string;
   price: number;
-  category: string; // e.g. "Groceries", "Coffee & Drinks", "Ice Cream & Treats"
+  category: string;
 }
 
 export interface Transaction {
   id: string;
   type: TransactionType;
   amount: number;
+  toAmount?: number; // Destination received amount for cross-currency transfers
   currency: CurrencyCode;
   date: string; // YYYY-MM-DD
   categoryId: string;
   accountId: string;
-  toAccountId?: string;
+  toAccountId?: string; // For transfers
   merchant?: string;
   notes?: string;
-  tags?: string[];
-  receiptUrl?: string; // base64 or photo URL
+  receiptItems?: ReceiptItem[];
   isCharity?: boolean;
   charityPledgeId?: string;
-  receiptItems?: ReceiptItem[]; // Itemized allotment from receipt scan!
   createdAt: string;
   updatedAt: string;
 }
 
-export interface Category {
-  id: string;
-  name: string;
-  type: 'expense' | 'income';
-  icon: string;
-  color: string;
-  isCharity?: boolean;
-}
-
-export type CharityStatus = 'pending' | 'partially_fulfilled' | 'fulfilled';
+export type PledgeStatus = 'pending' | 'partially_fulfilled' | 'fulfilled';
 
 export interface CharityPledge {
   id: string;
@@ -81,11 +77,11 @@ export interface CharityPledge {
   fulfilledAmount: number;
   dueDate?: string;
   notes?: string;
-  status: CharityStatus;
+  status: PledgeStatus;
   createdAt: string;
   updatedAt: string;
 }
 
-export type StudentNavTab = 'pockets' | 'scanner' | 'activity';
+export type ThemeMode = 'light' | 'dark';
 
-export type ExchangeRates = Record<CurrencyCode, number>;
+export type StudentNavTab = 'pockets' | 'scanner' | 'activity';

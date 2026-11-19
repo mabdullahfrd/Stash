@@ -7,7 +7,8 @@
       "properties": {
         "userId": {
           "type": "string",
-          "description": "Authentication UID of the user"
+          "description": "Authentication UID of the user",
+          "maxLength": 128
         },
         "displayName": {
           "type": "string",
@@ -31,14 +32,16 @@
         },
         "createdAt": {
           "type": "string",
-          "description": "ISO timestamp of user registration"
+          "description": "ISO timestamp of user registration",
+          "maxLength": 64
         },
         "updatedAt": {
           "type": "string",
-          "description": "ISO timestamp of profile update"
+          "description": "ISO timestamp of profile update",
+          "maxLength": 64
         }
       },
-      "required": ["userId", "email", "primaryCurrency"]
+      "required": ["userId", "email", "primaryCurrency", "updatedAt"]
     },
     "Account": {
       "title": "Account",
@@ -47,20 +50,23 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier of the pocket"
+          "description": "Unique identifier of the pocket",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
         "userId": {
           "type": "string",
-          "description": "Owner user UID"
+          "description": "Owner user UID",
+          "maxLength": 128
         },
         "name": {
           "type": "string",
           "description": "Name of the account/pocket",
-          "maxLength": 100
+          "maxLength": 120
         },
         "type": {
           "type": "string",
-          "enum": ["checking", "savings", "cash", "credit", "crypto"]
+          "enum": ["checking", "savings", "cash", "credit"]
         },
         "currency": {
           "type": "string",
@@ -68,28 +74,41 @@
         },
         "balance": {
           "type": "number",
-          "description": "Current balance in pocket currency"
+          "description": "Opening/base balance in pocket currency"
+        },
+        "creditLimit": {
+          "type": "number",
+          "description": "Optional credit limit for credit card accounts"
         },
         "institution": {
           "type": "string",
-          "maxLength": 100
+          "maxLength": 120
         },
-        "color": {
+        "accountNumber": {
           "type": "string",
-          "maxLength": 50
+          "maxLength": 60
+        },
+        "bankCode": {
+          "type": "string",
+          "maxLength": 40
         },
         "icon": {
           "type": "string",
-          "maxLength": 50
+          "maxLength": 60
+        },
+        "color": {
+          "type": "string",
+          "maxLength": 32
         },
         "isArchived": {
           "type": "boolean"
         },
         "updatedAt": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
         }
       },
-      "required": ["id", "userId", "name", "type", "currency", "balance"]
+      "required": ["id", "userId", "name", "type", "currency", "balance", "institution", "icon", "color"]
     },
     "Transaction": {
       "title": "Transaction",
@@ -98,11 +117,14 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique transaction ID"
+          "description": "Unique transaction ID",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
         "userId": {
           "type": "string",
-          "description": "Owner user UID"
+          "description": "Owner user UID",
+          "maxLength": 128
         },
         "type": {
           "type": "string",
@@ -110,23 +132,24 @@
         },
         "amount": {
           "type": "number",
-          "description": "Transaction amount"
+          "description": "Transaction amount in source currency"
+        },
+        "toAmount": {
+          "type": "number",
+          "description": "Destination received amount for cross-currency transfers"
         },
         "currency": {
           "type": "string",
           "enum": ["KRW", "USD", "EUR", "PKR"]
         },
-        "category": {
+        "date": {
           "type": "string",
-          "maxLength": 100
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
         },
-        "subCategory": {
+        "categoryId": {
           "type": "string",
-          "maxLength": 100
-        },
-        "description": {
-          "type": "string",
-          "maxLength": 200
+          "maxLength": 128
         },
         "accountId": {
           "type": "string",
@@ -136,21 +159,17 @@
           "type": "string",
           "maxLength": 128
         },
-        "date": {
-          "type": "string",
-          "maxLength": 30
-        },
         "merchant": {
           "type": "string",
-          "maxLength": 100
+          "maxLength": 200
         },
         "notes": {
           "type": "string",
-          "maxLength": 500
+          "maxLength": 1000
         },
-        "receiptUrl": {
-          "type": "string",
-          "maxLength": 500
+        "receiptItems": {
+          "type": "array",
+          "description": "Itemized receipt line items (bounded <= 100)"
         },
         "isCharity": {
           "type": "boolean"
@@ -160,10 +179,15 @@
           "maxLength": 128
         },
         "createdAt": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "maxLength": 64
         }
       },
-      "required": ["id", "userId", "type", "amount", "currency", "category", "accountId", "date"]
+      "required": ["id", "userId", "type", "amount", "currency", "date", "categoryId", "accountId", "createdAt", "updatedAt"]
     },
     "CharityPledge": {
       "title": "CharityPledge",
@@ -172,17 +196,24 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Pledge ID"
+          "description": "Pledge ID",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
         "userId": {
           "type": "string",
-          "description": "Owner user UID"
+          "description": "Owner user UID",
+          "maxLength": 128
         },
         "title": {
           "type": "string",
-          "maxLength": 150
+          "maxLength": 160
         },
-        "targetAmount": {
+        "cause": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "pledgedAmount": {
           "type": "number"
         },
         "fulfilledAmount": {
@@ -194,27 +225,26 @@
         },
         "dueDate": {
           "type": "string",
-          "maxLength": 30
+          "maxLength": 32
         },
         "notes": {
           "type": "string",
-          "maxLength": 500
+          "maxLength": 1000
         },
-        "category": {
+        "status": {
           "type": "string",
-          "enum": ["zakat", "sadaqah", "waqf", "food_aid", "general"]
-        },
-        "isCompleted": {
-          "type": "boolean"
+          "enum": ["pending", "partially_fulfilled", "fulfilled"]
         },
         "createdAt": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
         },
         "updatedAt": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
         }
       },
-      "required": ["id", "userId", "title", "targetAmount", "fulfilledAmount", "currency", "category"]
+      "required": ["id", "userId", "title", "cause", "pledgedAmount", "fulfilledAmount", "currency", "status", "createdAt", "updatedAt"]
     }
   },
   "firestore": {

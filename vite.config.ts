@@ -19,12 +19,12 @@ export default defineConfig(() => {
           'pwa-maskable-512x512.png',
         ],
         devOptions: {
-          enabled: true,
-          type: 'module',
+          enabled: false,
         },
         workbox: {
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          navigateFallbackDenylist: [/^\/api\//, /^\/__\/auth\//],
         },
         manifest: {
           id: '/',
@@ -66,6 +66,32 @@ export default defineConfig(() => {
         },
       }),
     ],
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              {
+                name: 'firebase',
+                test: /node_modules[\\/](?:@?firebase)/,
+              },
+              {
+                name: 'react-vendor',
+                test: /node_modules[\\/](?:react|react-dom|scheduler)/,
+              },
+              {
+                name: 'icons',
+                test: /node_modules[\\/]lucide-react/,
+              },
+              {
+                name: 'zod',
+                test: /node_modules[\\/]zod/,
+              },
+            ],
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(import.meta.dirname || '.', '.'),

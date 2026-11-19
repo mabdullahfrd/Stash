@@ -11,7 +11,112 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidCurrency(code) {
+      return code in ['KRW', 'USD', 'EUR', 'PKR'];
+    }
+
+    function isValidDateString(val) {
+      return val is string && val.size() == 10 && val.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['userId', 'email', 'primaryCurrency', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'email', 'displayName', 'photoURL', 'primaryCurrency', 'createdAt', 'updatedAt'])
+        && data.userId is string && data.userId == userId && data.userId == request.auth.uid
+        && data.email is string && data.email.size() <= 150
+        && isValidCurrency(data.primaryCurrency)
+        && data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 64
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100))
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500))
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64));
+    }
+
+    function isValidAccount(data, accountId, userId) {
+      return data.keys().hasAll(['id', 'userId', 'name', 'type', 'currency', 'balance', 'institution', 'icon', 'color'])
+        && data.keys().hasOnly([
+          'id', 'userId', 'name', 'type', 'currency', 'balance', 'creditLimit',
+          'institution', 'accountNumber', 'bankCode', 'icon', 'color', 'isArchived', 'updatedAt'
+        ])
+        && data.id is string && data.id == accountId
+        && data.userId is string && data.userId == userId && data.userId == request.auth.uid
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.type in ['checking', 'savings', 'credit', 'cash']
+        && isValidCurrency(data.currency)
+        && data.balance is number && data.balance >= -1000000000000 && data.balance <= 1000000000000
+        && (!('creditLimit' in data) || (data.creditLimit is number && data.creditLimit >= 0 && data.creditLimit <= 1000000000000))
+        && data.institution is string && data.institution.size() >= 1 && data.institution.size() <= 120
+        && (!('accountNumber' in data) || (data.accountNumber is string && data.accountNumber.size() <= 60))
+        && (!('bankCode' in data) || (data.bankCode is string && data.bankCode.size() <= 40))
+        && data.icon is string && data.icon.size() >= 1 && data.icon.size() <= 60
+        && data.color is string && data.color.size() >= 1 && data.color.size() <= 32
+        && (!('isArchived' in data) || data.isArchived is bool)
+        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+    }
+
+    function isValidReceiptItems(items) {
+      return items is list
+        && items.size() <= 100
+        && (
+          items.size() == 0
+          || (
+            items[0] is map
+            && items[0].keys().hasAll(['id', 'name', 'price', 'category'])
+            && items[0].keys().hasOnly(['id', 'name', 'price', 'category'])
+            && items[0].id is string && items[0].id.size() >= 1 && items[0].id.size() <= 128
+            && items[0].name is string && items[0].name.size() >= 1 && items[0].name.size() <= 200
+            && items[0].price is number && items[0].price >= 0 && items[0].price <= 1000000000000
+            && items[0].category is string && items[0].category.size() >= 1 && items[0].category.size() <= 120
+          )
+        );
+    }
+
+    function isValidTransaction(data, transactionId, userId) {
+      return data.keys().hasAll(['id', 'userId', 'type', 'amount', 'currency', 'date', 'categoryId', 'accountId', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'userId', 'type', 'amount', 'toAmount', 'currency', 'date',
+          'categoryId', 'accountId', 'toAccountId', 'merchant', 'notes',
+          'receiptItems', 'isCharity', 'charityPledgeId', 'createdAt', 'updatedAt'
+        ])
+        && data.id is string && data.id == transactionId
+        && data.userId is string && data.userId == userId && data.userId == request.auth.uid
+        && data.type in ['income', 'expense', 'transfer']
+        && data.amount is number && data.amount > 0 && data.amount <= 1000000000000
+        && (!('toAmount' in data) || (data.toAmount is number && data.toAmount > 0 && data.toAmount <= 1000000000000))
+        && isValidCurrency(data.currency)
+        && isValidDateString(data.date)
+        && data.categoryId is string && data.categoryId.size() >= 1 && data.categoryId.size() <= 128
+        && data.accountId is string && data.accountId.size() >= 1 && data.accountId.size() <= 128
+        && (!('toAccountId' in data) || (data.toAccountId is string && data.toAccountId.size() >= 1 && data.toAccountId.size() <= 128))
+        && (!('merchant' in data) || (data.merchant is string && data.merchant.size() <= 200))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
+        && (!('receiptItems' in data) || isValidReceiptItems(data.receiptItems))
+        && (!('isCharity' in data) || data.isCharity is bool)
+        && (!('charityPledgeId' in data) || (data.charityPledgeId is string && data.charityPledgeId.size() <= 128))
+        && data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 64;
+    }
+
+    function isValidCharityPledge(data, pledgeId, userId) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'cause', 'pledgedAmount', 'currency', 'fulfilledAmount', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'userId', 'title', 'cause', 'pledgedAmount', 'currency',
+          'fulfilledAmount', 'dueDate', 'notes', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.id is string && data.id == pledgeId
+        && data.userId is string && data.userId == userId && data.userId == request.auth.uid
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 160
+        && data.cause is string && data.cause.size() >= 1 && data.cause.size() <= 120
+        && data.pledgedAmount is number && data.pledgedAmount > 0 && data.pledgedAmount <= 1000000000000
+        && isValidCurrency(data.currency)
+        && data.fulfilledAmount is number && data.fulfilledAmount >= 0 && data.fulfilledAmount <= data.pledgedAmount
+        && (!('dueDate' in data) || (data.dueDate is string && data.dueDate.size() <= 32))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
+        && data.status in ['pending', 'partially_fulfilled', 'fulfilled']
+        && data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 64;
     }
 
     // Default deny all
@@ -19,28 +124,64 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Connection testing
-    match /test/{docId} {
-      allow read: if true;
-    }
-
-    // User profile and subcollections
+    // User profile (PII isolated to owner)
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserProfile(request.resource.data, userId);
+      allow update: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserProfile(request.resource.data, userId)
+        && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(userId) && isValidId(userId);
 
       // User financial accounts / pockets
       match /accounts/{accountId} {
-        allow read, write: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(accountId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(accountId)
+          && isValidAccount(request.resource.data, accountId, userId);
+        allow update: if isOwner(userId)
+          && isValidId(accountId)
+          && isValidAccount(request.resource.data, accountId, userId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.userId == resource.data.userId;
+        allow delete: if isOwner(userId) && isValidId(accountId);
       }
 
       // User transactions & itemized logs
       match /transactions/{transactionId} {
-        allow read, write: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(transactionId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(transactionId)
+          && isValidTransaction(request.resource.data, transactionId, userId);
+        allow update: if isOwner(userId)
+          && isValidId(transactionId)
+          && isValidTransaction(request.resource.data, transactionId, userId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isOwner(userId) && isValidId(transactionId);
       }
 
       // User charity pledges & donations
       match /charity_pledges/{pledgeId} {
-        allow read, write: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(pledgeId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(pledgeId)
+          && isValidCharityPledge(request.resource.data, pledgeId, userId);
+        allow update: if isOwner(userId)
+          && isValidId(pledgeId)
+          && isValidCharityPledge(request.resource.data, pledgeId, userId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isOwner(userId) && isValidId(pledgeId);
       }
     }
   }

@@ -4,7 +4,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { useFinance } from '../../context/FinanceContext';
+import { useFinanceData, useFinanceUI } from '../../context/FinanceContext';
 import {
   Search,
   Plus,
@@ -18,18 +18,12 @@ import { TransactionIcon } from '../common/TransactionIcon';
 import { findBankPreset } from '../../utils/koreanBanks';
 
 export const ActivityView: React.FC = () => {
-  const {
-    transactions,
-    accounts,
-    categories,
-    openTransactionModal,
-    exportTransactionsCSV,
-    selectedBankFilter,
-    setSelectedBankFilter,
-  } = useFinance();
+  const { transactions, accounts, categories, exportTransactionsCSV } = useFinanceData();
+  const { openTransactionModal, selectedBankFilter, setSelectedBankFilter } = useFinanceUI();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const activeAccounts = useMemo(() => accounts.filter((a) => !a.isArchived), [accounts]);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
@@ -74,7 +68,7 @@ export const ActivityView: React.FC = () => {
               Activity Ledger
             </h1>
             <p className="text-xs text-[#6B7268] dark:text-[#8E9689] mt-0.5">
-              {filteredTransactions.length} entries across {accounts.length} linked banks
+              {filteredTransactions.length} entries across {activeAccounts.length} linked banks
             </p>
           </div>
 
@@ -103,6 +97,7 @@ export const ActivityView: React.FC = () => {
           <Search className="w-4 h-4 text-[#8E9689] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
+            aria-label="Search transactions, merchants, notes, or receipt items"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search merchants, notes, or receipt items..."
@@ -123,7 +118,7 @@ export const ActivityView: React.FC = () => {
             All Banks
           </button>
 
-          {accounts.map((acc) => {
+          {activeAccounts.map((acc) => {
             const bankInfo = findBankPreset(acc.institution || acc.name);
             const isSelected = selectedBankFilter === acc.id;
 
@@ -206,10 +201,11 @@ export const ActivityView: React.FC = () => {
                 const bankInfo = account ? findBankPreset(account.institution || account.name) : null;
 
                 return (
-                  <div
+                  <button
                     key={tx.id}
+                    type="button"
                     onClick={() => openTransactionModal(tx)}
-                    className="p-4 hover:bg-black/[0.015] dark:hover:bg-white/[0.02] transition cursor-pointer space-y-2.5"
+                    className="w-full text-left p-4 hover:bg-black/[0.015] dark:hover:bg-white/[0.02] transition space-y-2.5 block"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
@@ -238,6 +234,7 @@ export const ActivityView: React.FC = () => {
                                 <span className="inline-flex items-center gap-1.5 text-[#111315] dark:text-[#D5DCD0] font-medium shrink-0">
                                   <BankLogo bank={bankInfo} size="xs" />
                                   {account.name}
+                                  {account.isArchived ? ' (Archived)' : ''}
                                 </span>
                                 <span className="shrink-0">·</span>
                               </>
@@ -262,6 +259,7 @@ export const ActivityView: React.FC = () => {
                             currency={tx.currency}
                             showSign={isIncome}
                             prefix={isIncome ? '' : '-'}
+                            interactive={false}
                           />
                         </span>
                       </div>
@@ -281,13 +279,13 @@ export const ActivityView: React.FC = () => {
                               {it.name} · {it.category}
                             </span>
                             <span className="font-mono font-semibold tabular-nums shrink-0">
-                              <HoldAmount amount={it.price} currency={tx.currency} />
+                              <HoldAmount amount={it.price} currency={tx.currency} interactive={false} />
                             </span>
                           </div>
                         ))}
                       </div>
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>

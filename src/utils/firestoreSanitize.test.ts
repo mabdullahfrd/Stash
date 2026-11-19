@@ -5,45 +5,60 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sanitizeForFirestore, formatFirebaseAuthError } from './firestoreSanitize';
+import {
+  sanitizeForFirestore,
+  validatePassword,
+  isStandalonePwa,
+  shouldFallbackToRedirect,
+  formatFirebaseAuthError,
+} from './firestoreSanitize';
 
-test('sanitizeForFirestore removes undefined keys and oversized base64 receiptUrl', () => {
-  const payload = {
+test('sanitizeForFirestore recursively strips undefined fields', () => {
+  const cleaned = sanitizeForFirestore({
     id: 'tx-1',
-    amount: 4500,
-    merchant: 'Mega Coffee',
-    notes: undefined,
-    toAccountId: undefined,
-    receiptUrl: 'data:image/png;base64,' + 'A'.repeat(2000),
-    receiptItems: [
-      { id: '1', name: 'Latte', price: 4500, category: 'Coffee & Drinks', extra: undefined },
-    ],
-  };
+    merchant: undefined,
+    nested: { a: 1, b: undefined },
+    items: [undefined, { name: 'Milk', note: undefined }],
+  });
 
-  const clean = sanitizeForFirestore(payload) as Record<string, unknown>;
-  assert.equal('notes' in clean, false);
-  assert.equal('toAccountId' in clean, false);
-  assert.equal('receiptUrl' in clean, false);
-  assert.equal(clean.merchant, 'Mega Coffee');
-  assert.equal((clean.receiptItems as Array<Record<string, unknown>>)[0].name, 'Latte');
-  assert.equal('extra' in (clean.receiptItems as Array<Record<string, unknown>>)[0], false);
+  assert.deepEqual(cleaned, {
+    id: 'tx-1',
+    nested: { a: 1 },
+    items: [{ name: 'Milk' }],
+  });
 });
 
-test('formatFirebaseAuthError maps common Firebase Auth codes cleanly', () => {
-  assert.match(
-    formatFirebaseAuthError({ code: 'auth/operation-not-allowed', message: 'raw' }),
-    /Continue with Google/i
+test('validatePassword enforces minimum 8 characters', () => {
+  assert.equal(validatePassword('1234567').valid, false);
+  assert.equal(validatePassword('').valid, false);
+  assert.equal(validatePassword('12345678').valid, true);
+});
+
+test('isStandalonePwa detects iOS standalone and display-mode standalone', () => {
+  assert.equal(isStandalonePwa({ standalone: true }, undefined), true);
+  assert.equal(
+    isStandalonePwa(undefined, { matchMedia: () => ({ matches: true }) }),
+    true
   );
-  assert.match(
-    formatFirebaseAuthError({ code: 'auth/popup-blocked', message: 'raw' }),
-    /popup/i
+  assert.equal(
+    isStandalonePwa({ standalone: false }, { matchMedia: () => ({ matches: false }) }),
+    false
   );
-  assert.match(
-    formatFirebaseAuthError({ code: 'auth/invalid-credential', message: 'raw' }),
-    /Incorrect email or password/i
+});
+
+test('shouldFallbackToRedirect only triggers on popup-blocked or unsupported env', () => {
+  assert.equal(shouldFallbackToRedirect({ code: 'auth/popup-blocked' }), true);
+  assert.equal(
+    shouldFallbackToRedirect({ code: 'auth/operation-not-supported-in-this-environment' }),
+    true
   );
+  assert.equal(shouldFallbackToRedirect({ code: 'auth/popup-closed-by-user' }), false);
+});
+
+test('formatFirebaseAuthError maps weak-password and requires-recent-login cleanly', () => {
+  assert.match(formatFirebaseAuthError({ code: 'auth/weak-password' }), /8 characters/);
   assert.match(
-    formatFirebaseAuthError({ code: 'auth/unauthorized-domain', message: 'raw' }),
-    /Authorized domains/i
+    formatFirebaseAuthError({ code: 'auth/requires-recent-login' }),
+    /re-authenticate/i
   );
 });

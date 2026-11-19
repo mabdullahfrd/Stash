@@ -19,6 +19,7 @@ interface CategoryRule {
   isCharity?: boolean;
 }
 
+// Ordered by specificity: charity, subscriptions, health, coffee/treats, groceries, dining, bills, shopping, study, transit
 const AUTO_CATEGORY_RULES: CategoryRule[] = [
   {
     categoryId: 'cat-charity',
@@ -41,6 +42,95 @@ const AUTO_CATEGORY_RULES: CategoryRule[] = [
       '자선',
       '자카트',
       '후원',
+    ],
+  },
+  {
+    categoryId: 'cat-subscriptions',
+    type: 'expense',
+    keywords: [
+      'apple music',
+      'spotify',
+      'youtube premium',
+      'netflix',
+      'disney+',
+      'icloud',
+      'google one',
+      'chatgpt',
+      'notion',
+      'coupang wow',
+      'naver plus',
+      'subscription',
+      'membership',
+      'streaming',
+      '멜론',
+      '지니뮤직',
+      '넷플릭스',
+      '유튜브 프리미엄',
+      '정기결제',
+      '구독',
+      '멤버십',
+    ],
+  },
+  {
+    categoryId: 'cat-health',
+    type: 'expense',
+    keywords: [
+      'pharmacy',
+      'clinic',
+      'hospital',
+      'dentist',
+      'doctor',
+      'medicine',
+      'vitamin',
+      'gym',
+      'fitness',
+      'pilates',
+      'olive young',
+      '약국',
+      '병원',
+      '치과',
+      '내과',
+      '의원',
+      '헬스장',
+      '올리브영',
+    ],
+  },
+  {
+    categoryId: 'cat-icecream',
+    type: 'expense',
+    keywords: [
+      'ice cream',
+      'icecream',
+      'baskin',
+      'haagen',
+      'gelato',
+      'bingsu',
+      'dessert',
+      'cake',
+      'macaron',
+      'cookie',
+      'chocolate',
+      'chocolate bar',
+      'candy',
+      'snack',
+      'chips',
+      'waffle',
+      'croffle',
+      'tiramisu',
+      'churros',
+      'donut',
+      'doughnut',
+      'treat',
+      '배스킨',
+      '베라',
+      '아이스크림',
+      '메로나',
+      '마카롱',
+      '케이크',
+      '디저트',
+      '과자',
+      '초콜릿',
+      '빙수',
     ],
   },
   {
@@ -90,104 +180,6 @@ const AUTO_CATEGORY_RULES: CategoryRule[] = [
       '아메리카노',
       '음료',
       '카페',
-    ],
-  },
-  {
-    categoryId: 'cat-icecream',
-    type: 'expense',
-    keywords: [
-      'ice cream',
-      'icecream',
-      'baskin',
-      'haagen',
-      'gelato',
-      'bingsu',
-      'dessert',
-      'cake',
-      'macaron',
-      'cookie',
-      'chocolate',
-      'candy',
-      'snack',
-      'chips',
-      'waffle',
-      'croffle',
-      'tiramisu',
-      'churros',
-      'donut',
-      'doughnut',
-      'treat',
-      '배스킨',
-      '베라',
-      '아이스크림',
-      '메로나',
-      '마카롱',
-      '케이크',
-      '디저트',
-      '과자',
-      '초콜릿',
-      '빙수',
-    ],
-  },
-  {
-    categoryId: 'cat-groceries',
-    type: 'expense',
-    keywords: [
-      'egg',
-      'eggs',
-      'bread',
-      'milk',
-      'butter',
-      'cheese',
-      'yogurt',
-      'rice',
-      'ramen',
-      'ramyun',
-      'noodle',
-      'apple',
-      'banana',
-      'fruit',
-      'vegetable',
-      'veggies',
-      'onion',
-      'garlic',
-      'tomato',
-      'potato',
-      'chicken breast',
-      'beef',
-      'pork',
-      'meat',
-      'fish',
-      'salmon',
-      'tofu',
-      'kimchi',
-      'cereal',
-      'oat',
-      'water',
-      'grocery',
-      'groceries',
-      'mart',
-      'emart',
-      'homeplus',
-      'lotte mart',
-      'coupang fresh',
-      'market',
-      'cu ',
-      'gs25',
-      '7-eleven',
-      'emart24',
-      '계란',
-      '달걀',
-      '특란',
-      '식빵',
-      '빵',
-      '우유',
-      '쌀',
-      '라면',
-      '이마트',
-      '마트',
-      '편의점',
-      '장보기',
     ],
   },
   {
@@ -247,6 +239,94 @@ const AUTO_CATEGORY_RULES: CategoryRule[] = [
     ],
   },
   {
+    categoryId: 'cat-groceries',
+    type: 'expense',
+    keywords: [
+      'egg',
+      'eggs',
+      'bread',
+      'milk',
+      'butter',
+      'cheese',
+      'yogurt',
+      'rice',
+      'ramen',
+      'ramyun',
+      'noodle',
+      'apple',
+      'banana',
+      'fruit',
+      'vegetable',
+      'veggies',
+      'onion',
+      'garlic',
+      'tomato',
+      'potato',
+      'chicken breast',
+      'beef',
+      'pork',
+      'meat',
+      'fish',
+      'salmon',
+      'tofu',
+      'kimchi',
+      'cereal',
+      'oat',
+      'water',
+      'grocery',
+      'groceries',
+      'mart',
+      'emart',
+      'emart24',
+      'homeplus',
+      'lotte mart',
+      'coupang fresh',
+      'market',
+      'cu',
+      'gs25',
+      '7-eleven',
+      '계란',
+      '달걀',
+      '특란',
+      '식빵',
+      '빵',
+      '우유',
+      '쌀',
+      '라면',
+      '이마트',
+      '마트',
+      '편의점',
+      '장보기',
+    ],
+  },
+  {
+    categoryId: 'cat-bills',
+    type: 'expense',
+    keywords: [
+      'rent',
+      'electricity',
+      'electric bill',
+      'water bill',
+      'gas bill',
+      'utility',
+      'utilities',
+      'internet',
+      'wifi',
+      'phone bill',
+      'mobile plan',
+      'kt',
+      'skt',
+      'lgu+',
+      '월세',
+      '관리비',
+      '전기세',
+      '수도세',
+      '가스비',
+      '통신비',
+      '공과금',
+    ],
+  },
+  {
     categoryId: 'cat-study',
     type: 'expense',
     keywords: [
@@ -275,7 +355,6 @@ const AUTO_CATEGORY_RULES: CategoryRule[] = [
       'kyobo',
       'hottracks',
       'daiso',
-      'alpha',
       'study',
       'exam',
       '책',
@@ -289,6 +368,30 @@ const AUTO_CATEGORY_RULES: CategoryRule[] = [
       '인쇄',
       '프린트',
       '학용품',
+    ],
+  },
+  {
+    categoryId: 'cat-shopping',
+    type: 'expense',
+    keywords: [
+      'clothes',
+      'shirt',
+      'shoes',
+      'sneakers',
+      'jacket',
+      'uniqlo',
+      'zara',
+      'musinsa',
+      'coupang',
+      'fashion',
+      'backpack',
+      'electronics',
+      '무신사',
+      '유니클로',
+      '쿠팡',
+      '쇼핑',
+      '의류',
+      '신발',
     ],
   },
   {
@@ -355,7 +458,7 @@ const AUTO_CATEGORY_RULES: CategoryRule[] = [
       'tutor',
       'tutoring',
       'teaching',
-      'ta ',
+      'ta',
       'research assistant',
       'campus job',
       '과외',
@@ -382,26 +485,58 @@ const AUTO_CATEGORY_RULES: CategoryRule[] = [
   },
 ];
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function isLatinKeyword(keyword: string): boolean {
+  return /^[a-z0-9\s\-+]+$/i.test(keyword);
+}
+
+function matchesKeyword(haystackLower: string, rawKeyword: string): boolean {
+  const kw = rawKeyword.trim().toLowerCase();
+  if (!kw) return false;
+
+  if (isLatinKeyword(kw)) {
+    const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegExp(kw)}($|[^a-z0-9])`, 'i');
+    return pattern.test(haystackLower);
+  }
+
+  return haystackLower.includes(kw);
+}
+
+export function getFallbackCategory(
+  categories: Category[],
+  type: TransactionType = 'expense'
+): Category {
+  const uncategorized = categories.find((c) => c.id === 'cat-uncategorized' || c.name === 'Uncategorized');
+  if (uncategorized) return uncategorized;
+  const typed = categories.find((c) => c.type === (type === 'income' ? 'income' : 'expense'));
+  return (
+    typed ||
+    categories[0] || {
+      id: 'cat-uncategorized',
+      name: 'Uncategorized',
+      type: 'expense',
+      icon: 'Tag',
+      color: '#8E8E93',
+    }
+  );
+}
+
 export function inferCategoryForItem(
   itemText: string,
   categories: Category[],
   currentType: TransactionType = 'expense'
 ): AutoCategoryMatch | null {
-  const normalized = ` ${itemText.trim().toLowerCase()} `;
-  if (normalized.trim().length < 2) return null;
+  const normalized = itemText.trim().toLowerCase();
+  if (normalized.length < 2) return null;
 
   for (const rule of AUTO_CATEGORY_RULES) {
     if (currentType !== 'transfer' && rule.type !== currentType) continue;
 
     for (const kw of rule.keywords) {
-      const kwClean = kw.toLowerCase();
-      // Match whole token or substring for multi-char / Korean keywords
-      const isShortAscii = /^[a-z0-9 ]{1,3}$/.test(kwClean.trim());
-      const matched = isShortAscii
-        ? normalized.includes(` ${kwClean.trim()} `) || normalized.trim() === kwClean.trim()
-        : normalized.includes(kwClean);
-
-      if (matched) {
+      if (matchesKeyword(normalized, kw)) {
         const category = categories.find(
           (c) =>
             c.id === rule.categoryId ||
@@ -420,4 +555,17 @@ export function inferCategoryForItem(
   }
 
   return null;
+}
+
+export function categorizeItemOrUncategorized(
+  itemText: string,
+  categories: Category[],
+  currentType: TransactionType = 'expense'
+): Category {
+  const match = inferCategoryForItem(itemText, categories, currentType);
+  if (match) {
+    const found = categories.find((c) => c.id === match.categoryId);
+    if (found) return found;
+  }
+  return getFallbackCategory(categories, currentType);
 }

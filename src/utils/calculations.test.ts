@@ -10,6 +10,7 @@ import {
   computeNetWorth,
   computeCashFlow,
   computeCharityStats,
+  computePledgeFulfillment,
 } from './calculations';
 import { convertCurrency, DEFAULT_EXCHANGE_RATES } from './currencies';
 import { Account, CharityPledge, Transaction } from '../types/finance';
@@ -211,3 +212,172 @@ test('Charity pledges and pending obligation calculations', () => {
   assert.equal(stats.fulfillmentPercent, 50);
   assert.equal(stats.pendingPledgesCount, 2); // pl-1 and pl-3
 });
+
+test('Multi-currency expense and cross-currency transfers compute balances accurately', () => {
+  const accounts: Account[] = [
+    {
+      id: 'acc-krw',
+      name: 'Hana KRW',
+      type: 'checking',
+      currency: 'KRW',
+      balance: 100000,
+      institution: 'Hana Bank',
+      color: '#008485',
+      icon: 'Building2',
+    },
+    {
+      id: 'acc-usd',
+      name: 'USD Travel',
+      type: 'checking',
+      currency: 'USD',
+      balance: 0,
+      institution: 'Global USD',
+      color: '#007AFF',
+      icon: 'Globe',
+    },
+  ];
+
+  // 10 USD expense on KRW account (balance 100,000) -> 100,000 - 13,800 = 86,200
+  const afterExpense = computeAccountBalances(
+    accounts,
+    [
+      {
+        id: 'tx-usd-exp',
+        type: 'expense',
+        amount: 10,
+        currency: 'USD',
+        date: '2026-11-19',
+        categoryId: 'cat-dining',
+        accountId: 'acc-krw',
+        createdAt: '2026-11-19T10:00:00Z',
+        updatedAt: '2026-11-19T10:00:00Z',
+      },
+    ],
+    DEFAULT_EXCHANGE_RATES
+  );
+  assert.equal(afterExpense['acc-krw'], 86200);
+
+  // 100,000 KRW transfer to USD account -> adds ~72.46 USD and leaves KRW at 0
+  const afterTransfer = computeAccountBalances(
+    accounts,
+    [
+      {
+        id: 'tx-krw-to-usd',
+        type: 'transfer',
+        amount: 100000,
+        currency: 'KRW',
+        date: '2026-11-19',
+        categoryId: 'cat-transfer',
+        accountId: 'acc-krw',
+        toAccountId: 'acc-usd',
+        createdAt: '2026-11-19T11:00:00Z',
+        updatedAt: '2026-11-19T11:00:00Z',
+      },
+    ],
+    DEFAULT_EXCHANGE_RATES
+  );
+  assert.equal(afterTransfer['acc-krw'], 0);
+  assert.equal(afterTransfer['acc-usd'], 72.46);
+
+  // Explicit user-edited toAmount overrides rate conversion
+  const withCustomToAmount = computeAccountBalances(
+    accounts,
+    [
+      {
+        id: 'tx-krw-to-usd-custom',
+        type: 'transfer',
+        amount: 100000,
+        toAmount: 70.5,
+        currency: 'KRW',
+        date: '2026-11-19',
+        categoryId: 'cat-transfer',
+        accountId: 'acc-krw',
+        toAccountId: 'acc-usd',
+        createdAt: '2026-11-19T11:00:00Z',
+        updatedAt: '2026-11-19T11:00:00Z',
+      },
+    ],
+    DEFAULT_EXCHANGE_RATES
+  );
+  assert.equal(withCustomToAmount['acc-usd'], 70.5);
+});
+
+test('computeCashFlow ignores transactions whose account no longer exists', () => {
+  const accounts: Account[] = [
+    {
+      id: 'acc-live',
+      name: 'Live Account',
+      type: 'checking',
+      currency: 'KRW',
+      balance: 0,
+      institution: 'Hana Bank',
+      color: '#008485',
+      icon: 'Building2',
+    },
+  ];
+  const transactions: Transaction[] = [
+    {
+      id: 'tx-live',
+      type: 'expense',
+      amount: 5000,
+      currency: 'KRW',
+      date: '2026-11-19',
+      categoryId: 'cat-coffee',
+      accountId: 'acc-live',
+      createdAt: '2026-11-19T10:00:00Z',
+      updatedAt: '2026-11-19T10:00:00Z',
+    },
+    {
+      id: 'tx-orphan',
+      type: 'expense',
+      amount: 99000,
+      currency: 'KRW',
+      date: '2026-11-19',
+      categoryId: 'cat-coffee',
+      accountId: 'acc-deleted',
+      createdAt: '2026-11-19T10:00:00Z',
+      updatedAt: '2026-11-19T10:00:00Z',
+    },
+  ];
+
+  const flow = computeCashFlow(transactions, 'KRW', DEFAULT_EXCHANGE_RATES, undefined, accounts);
+  assert.equal(flow.totalExpenses, 5000);
+});
+
+test('computePledgeFulfillment validates amounts and converts across currencies', () => {
+  const pledge: CharityPledge = {
+    id: 'pl-krw',
+    title: 'Student Zakat',
+    cause: 'Zakat',
+    pledgedAmount: 100000,
+    fulfilledAmount: 50000,
+    currency: 'KRW',
+    status: 'partially_fulfilled',
+    createdAt: '2026-11-01',
+    updatedAt: '2026-11-01',
+  };
+
+  const badZero = computePledgeFulfillment(pledge, 0, 'USD', DEFAULT_EXCHANGE_RATES);
+  assert.equal(badZero.ok, false);
+
+  const badOver = computePledgeFulfillment(pledge, 50, 'USD', DEFAULT_EXCHANGE_RATES); // 50 USD = 69,000 KRW > 50,000 remaining
+  assert.equal(badOver.ok, false);
+
+  // 20 USD = 27,600 KRW -> fulfilled = 77,600 KRW -> partially_fulfilled
+  const partial = computePledgeFulfillment(pledge, 20, 'USD', DEFAULT_EXCHANGE_RATES);
+  assert.equal(partial.ok, true);
+  if (partial.ok) {
+    assert.equal(partial.convertedInPledgeCurrency, 27600);
+    assert.equal(partial.newFulfilledAmount, 77600);
+    assert.equal(partial.newStatus, 'partially_fulfilled');
+  }
+
+  // Exact remaining 50,000 KRW -> fulfilled
+  const exact = computePledgeFulfillment(pledge, 50000, 'KRW', DEFAULT_EXCHANGE_RATES);
+  assert.equal(exact.ok, true);
+  if (exact.ok) {
+    assert.equal(exact.newFulfilledAmount, 100000);
+    assert.equal(exact.newStatus, 'fulfilled');
+  }
+});
+

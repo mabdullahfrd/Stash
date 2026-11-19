@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Account, Budget, CharityPledge, CurrencyCode, ExchangeRates, Transaction } from '../types/finance';
-import { convertCurrency } from './currencies';
+import { Account, CharityPledge, CurrencyCode, ExchangeRates, Transaction } from '../types/finance';
+import { convertCurrency, CURRENCY_REGISTRY, DEFAULT_EXCHANGE_RATES, roundCurrencyAmount } from './currencies';
 
 export interface CalculatedAccountBalance {
   accountId: string;
@@ -12,61 +12,67 @@ export interface CalculatedAccountBalance {
   availableCredit?: number;
 }
 
+function roundToAccountPrecision(value: number, currency: CurrencyCode): number {
+  const decimals = CURRENCY_REGISTRY[currency]?.decimals ?? 2;
+  return decimals === 0 ? Math.round(value) : Number(value.toFixed(decimals));
+}
+
 /**
  * Computes live balances for all accounts based on their starting balance and transaction ledger.
+ * Converts each transaction's amount from tx.currency into the respective account's currency.
  */
 export function computeAccountBalances(
   accounts: Account[],
-  transactions: Transaction[]
+  transactions: Transaction[],
+  rates: ExchangeRates = DEFAULT_EXCHANGE_RATES
 ): Record<string, number> {
   const balances: Record<string, number> = {};
+  const accountMap = new Map<string, Account>();
 
-  // Initialize with initial balances
   for (const acc of accounts) {
     balances[acc.id] = acc.balance;
+    accountMap.set(acc.id, acc);
   }
 
-  // Process all transactions
   for (const tx of transactions) {
-    const account = accounts.find((a) => a.id === tx.accountId);
+    const account = accountMap.get(tx.accountId);
     if (!account) continue;
 
     const isCredit = account.type === 'credit';
+    const sourceDelta = convertCurrency(tx.amount, tx.currency, account.currency, rates);
 
     if (tx.type === 'income') {
       if (isCredit) {
-        // Refund or credit repayment applied as income: decreases owed debt
-        balances[account.id] = (balances[account.id] || 0) - tx.amount;
+        balances[account.id] = roundToAccountPrecision((balances[account.id] || 0) - sourceDelta, account.currency);
       } else {
-        // Increases asset balance
-        balances[account.id] = (balances[account.id] || 0) + tx.amount;
+        balances[account.id] = roundToAccountPrecision((balances[account.id] || 0) + sourceDelta, account.currency);
       }
     } else if (tx.type === 'expense') {
       if (isCredit) {
-        // Spending on credit card increases owed debt
-        balances[account.id] = (balances[account.id] || 0) + tx.amount;
+        balances[account.id] = roundToAccountPrecision((balances[account.id] || 0) + sourceDelta, account.currency);
       } else {
-        // Decreases asset balance
-        balances[account.id] = (balances[account.id] || 0) - tx.amount;
+        balances[account.id] = roundToAccountPrecision((balances[account.id] || 0) - sourceDelta, account.currency);
       }
     } else if (tx.type === 'transfer' && tx.toAccountId) {
-      const destAccount = accounts.find((a) => a.id === tx.toAccountId);
+      const destAccount = accountMap.get(tx.toAccountId);
       if (destAccount) {
         const destIsCredit = destAccount.type === 'credit';
 
-        // Deduct from source
         if (isCredit) {
-          balances[account.id] = (balances[account.id] || 0) + tx.amount; // Drawing cash from credit line
+          balances[account.id] = roundToAccountPrecision((balances[account.id] || 0) + sourceDelta, account.currency);
         } else {
-          balances[account.id] = (balances[account.id] || 0) - tx.amount; // Standard cash outflow
+          balances[account.id] = roundToAccountPrecision((balances[account.id] || 0) - sourceDelta, account.currency);
         }
 
-        // Add to destination
+        const destDelta =
+          typeof tx.toAmount === 'number' && Number.isFinite(tx.toAmount) && tx.toAmount > 0
+            ? tx.toAmount
+            : convertCurrency(tx.amount, tx.currency, destAccount.currency, rates);
+
         if (destIsCredit) {
-          // Paying credit card balance reduces owed liability!
-          balances[destAccount.id] = (balances[destAccount.id] || 0) - tx.amount;
+          balances[destAccount.id] = roundToAccountPrecision((balances[destAccount.id] || 0) - destDelta, destAccount.currency);
         } else {
-          balances[destAccount.id] = (balances[destAccount.id] || 0) + tx.amount;
+          balances[destAccount.id] = roundToAccountPrecision((balances[destAccount.id] || 0) + destDelta, destAccount.currency);
         }
       }
     }
@@ -98,7 +104,6 @@ export function computeNetWorth(
     const converted = convertCurrency(balance, acc.currency, targetCurrency, rates);
 
     if (acc.type === 'credit') {
-      // For credit cards, balance is liability owed
       totalLiabilities += Math.max(0, converted);
     } else {
       totalAssets += converted;
@@ -114,13 +119,14 @@ export function computeNetWorth(
 
 /**
  * Computes Cash Flow (Total Income, Total Expense, Net Flow) for a given set of transactions.
- * Pure transfers are excluded from income and expenses to avoid double-counting.
+ * Pure transfers and transactions referencing deleted accounts are excluded.
  */
 export function computeCashFlow(
   transactions: Transaction[],
   targetCurrency: CurrencyCode,
   rates: ExchangeRates,
-  dateFilter?: { start?: string; end?: string }
+  dateFilter?: { start?: string; end?: string },
+  accounts?: Account[]
 ): {
   totalIncome: number;
   totalExpenses: number;
@@ -129,14 +135,16 @@ export function computeCashFlow(
 } {
   let totalIncome = 0;
   let totalExpenses = 0;
+  const existingAccountIds = accounts ? new Set(accounts.map((a) => a.id)) : null;
 
   for (const tx of transactions) {
+    if (existingAccountIds && !existingAccountIds.has(tx.accountId)) continue;
+
     if (dateFilter) {
       if (dateFilter.start && tx.date < dateFilter.start) continue;
       if (dateFilter.end && tx.date > dateFilter.end) continue;
     }
 
-    // Transfers never count toward income or expense
     if (tx.type === 'transfer') continue;
 
     const converted = convertCurrency(tx.amount, tx.currency, targetCurrency, rates);
@@ -197,49 +205,59 @@ export function computeCharityStats(
   };
 }
 
-/**
- * Computes budget utilization for category budgets.
- */
-export function computeBudgetUtilization(
-  budgets: Budget[],
-  transactions: Transaction[],
-  targetCurrency: CurrencyCode,
-  rates: ExchangeRates,
-  currentMonthPrefix: string // e.g. "2026-11"
-): Array<{
-  budget: Budget;
-  spent: number;
-  remaining: number;
-  percentUsed: number;
-  isOverBudget: boolean;
-  isWarning: boolean;
-}> {
-  return budgets.map((budget) => {
-    // Filter monthly transactions for this category
-    const relevantTxs = transactions.filter((tx) => {
-      if (tx.type !== 'expense') return false;
-      if (!tx.date.startsWith(currentMonthPrefix)) return false;
-      if (budget.categoryId === 'all') return true;
-      return tx.categoryId === budget.categoryId;
-    });
-
-    const spent = relevantTxs.reduce((sum, tx) => {
-      return sum + convertCurrency(tx.amount, tx.currency, targetCurrency, rates);
-    }, 0);
-
-    const budgetLimit = convertCurrency(budget.amount, budget.currency, targetCurrency, rates);
-    const remaining = budgetLimit - spent;
-    const percentUsed = budgetLimit > 0 ? (spent / budgetLimit) * 100 : 0;
-    const isOverBudget = spent > budgetLimit;
-    const isWarning = !isOverBudget && percentUsed >= budget.warningThresholdPercent;
-
-    return {
-      budget,
-      spent,
-      remaining,
-      percentUsed: Number(percentUsed.toFixed(1)),
-      isOverBudget,
-      isWarning,
+export type PledgeFulfillmentResult =
+  | {
+      ok: true;
+      convertedInPledgeCurrency: number;
+      newFulfilledAmount: number;
+      newStatus: CharityPledge['status'];
+    }
+  | {
+      ok: false;
+      error: string;
     };
-  });
+
+/**
+ * Validates and computes charity pledge fulfillment across currencies.
+ */
+export function computePledgeFulfillment(
+  pledge: CharityPledge,
+  paidAmount: number,
+  paidCurrency: CurrencyCode,
+  rates: ExchangeRates = DEFAULT_EXCHANGE_RATES
+): PledgeFulfillmentResult {
+  if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+    return { ok: false, error: 'Enter a fulfillment amount greater than 0.' };
+  }
+
+  const remaining = Math.max(0, roundCurrencyAmount(pledge.pledgedAmount - pledge.fulfilledAmount, pledge.currency));
+  if (remaining <= 0) {
+    return { ok: false, error: 'This charity pledge is already fully fulfilled.' };
+  }
+
+  const convertedInPledgeCurrency = convertCurrency(paidAmount, paidCurrency, pledge.currency, rates);
+  if (!Number.isFinite(convertedInPledgeCurrency) || convertedInPledgeCurrency <= 0) {
+    return { ok: false, error: 'Fulfillment amount is too small after currency conversion.' };
+  }
+
+  if (convertedInPledgeCurrency > remaining) {
+    return {
+      ok: false,
+      error: `Amount exceeds the remaining pledge balance (${remaining} ${pledge.currency}).`,
+    };
+  }
+
+  const newFulfilledAmount = roundCurrencyAmount(
+    pledge.fulfilledAmount + convertedInPledgeCurrency,
+    pledge.currency
+  );
+  const newStatus: CharityPledge['status'] =
+    newFulfilledAmount >= pledge.pledgedAmount ? 'fulfilled' : 'partially_fulfilled';
+
+  return {
+    ok: true,
+    convertedInPledgeCurrency,
+    newFulfilledAmount,
+    newStatus,
+  };
 }

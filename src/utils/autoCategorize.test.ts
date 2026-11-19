@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { INITIAL_CATEGORIES } from '../data/seedData.ts';
-import { inferCategoryForItem } from './autoCategorize.ts';
+import { categorizeItemOrUncategorized, inferCategoryForItem } from './autoCategorize.ts';
 
 test('Auto-categorizes common grocery, coffee, treat, dining, study, and transit items', () => {
   const eggs = inferCategoryForItem('Grade-A Eggs', INITIAL_CATEGORIES, 'expense');
@@ -26,6 +26,23 @@ test('Auto-categorizes common grocery, coffee, treat, dining, study, and transit
 
   const metro = inferCategoryForItem('T-Money Subway Recharge', INITIAL_CATEGORIES, 'expense');
   assert.equal(metro?.categoryId, 'cat-transit');
+});
+
+test('Respects word boundaries and specificity rules for Chocolate bar, Apple Music, Campus Cafeteria Lunch, Smart Store, Price tag', () => {
+  const choco = categorizeItemOrUncategorized('Chocolate bar', INITIAL_CATEGORIES, 'expense');
+  assert.equal(choco.name, 'Ice Cream & Treats');
+
+  const appleMusic = categorizeItemOrUncategorized('Apple Music', INITIAL_CATEGORIES, 'expense');
+  assert.equal(appleMusic.name, 'Subscriptions');
+
+  const cafeteria = categorizeItemOrUncategorized('Campus Cafeteria Lunch', INITIAL_CATEGORIES, 'expense');
+  assert.equal(cafeteria.name, 'Dining & Takeout');
+
+  const smartStore = categorizeItemOrUncategorized('Smart Store', INITIAL_CATEGORIES, 'expense');
+  assert.equal(smartStore.name, 'Uncategorized');
+
+  const priceTag = categorizeItemOrUncategorized('Price tag', INITIAL_CATEGORIES, 'expense');
+  assert.equal(priceTag.name, 'Uncategorized');
 });
 
 test('Auto-categorizes charity keywords and income keywords accurately', () => {
