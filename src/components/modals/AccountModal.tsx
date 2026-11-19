@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useFinance } from '../../context/FinanceContext';
 import { X, Check } from 'lucide-react';
 import { AccountType, CurrencyCode } from '../../types/finance';
@@ -11,31 +11,53 @@ import { CURRENCY_REGISTRY } from '../../utils/currencies';
 import { KOREAN_BANKS, KoreanBankPreset } from '../../utils/koreanBanks';
 import { BankLogo } from '../common/BankLogo';
 
+function defaultNicknameForPreset(preset: KoreanBankPreset): string {
+  return `${preset.name} ${
+    preset.defaultType === 'savings' ? 'Vault' : preset.defaultType === 'cash' ? '' : 'Account'
+  }`.trim();
+}
+
 export const AccountModal: React.FC = () => {
-  const { isAccountModalOpen, closeAccountModal, addAccount, activeCurrency } = useFinance();
+  const {
+    isAccountModalOpen,
+    initialBankPresetId,
+    closeAccountModal,
+    addAccount,
+    activeCurrency,
+  } = useFinance();
 
   const [selectedPreset, setSelectedPreset] = useState<KoreanBankPreset>(KOREAN_BANKS[0]);
-  const [name, setName] = useState('Shinhan Checking');
-  const [accountNumber, setAccountNumber] = useState('•••• 4921');
+  const [name, setName] = useState(defaultNicknameForPreset(KOREAN_BANKS[0]));
+  const [accountNumber, setAccountNumber] = useState('');
   const [type, setType] = useState<AccountType>('checking');
   const [currency, setCurrency] = useState<CurrencyCode>(activeCurrency);
   const [balance, setBalance] = useState('');
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (!isAccountModalOpen) return;
+    const preset =
+      (initialBankPresetId && KOREAN_BANKS.find((b) => b.id === initialBankPresetId)) ||
+      KOREAN_BANKS[0];
+    setSelectedPreset(preset);
+    setName(defaultNicknameForPreset(preset));
+    setType(preset.defaultType);
+    setCurrency(activeCurrency);
+    setAccountNumber(preset.id === 'cash' ? 'Cash in Hand' : '');
+    setBalance('');
+    setError('');
+  }, [isAccountModalOpen, initialBankPresetId, activeCurrency]);
+
   if (!isAccountModalOpen) return null;
 
   const handleSelectPreset = (preset: KoreanBankPreset) => {
     setSelectedPreset(preset);
-    setName(
-      `${preset.name} ${
-        preset.defaultType === 'savings' ? 'Vault' : preset.defaultType === 'cash' ? '' : 'Account'
-      }`.trim()
-    );
+    setName(defaultNicknameForPreset(preset));
     setType(preset.defaultType);
     if (preset.id === 'cash') {
       setAccountNumber('Cash in Hand');
     } else if (accountNumber === 'Cash in Hand') {
-      setAccountNumber(`•••• ${Math.floor(1000 + Math.random() * 9000)}`);
+      setAccountNumber('');
     }
   };
 

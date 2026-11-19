@@ -97,6 +97,7 @@ export const ScannerView: React.FC = () => {
     addTransaction,
     addBatchTransactions,
     setActiveTab,
+    openAccountModal,
   } = useFinance();
 
   const [importMode, setImportMode] = useState<'bank' | 'receipt'>('bank');
@@ -359,6 +360,10 @@ export const ScannerView: React.FC = () => {
 
   const handleSaveAndAllotAll = () => {
     if (items.length === 0) return;
+    if (!selectedAccount) {
+      openAccountModal();
+      return;
+    }
     const today = new Date().toISOString().split('T')[0];
 
     Object.entries(categoryBreakdown).forEach(([catName, sumAmount]) => {
@@ -540,6 +545,20 @@ export const ScannerView: React.FC = () => {
                 <label className="text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] block">
                   Assign to Bank Account
                 </label>
+                {accounts.length === 0 ? (
+                  <div className="p-3.5 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-dashed border-black/[0.14] dark:border-white/[0.14] flex items-center justify-between gap-3">
+                    <span className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
+                      Link a bank account first to assign imported entries.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openAccountModal()}
+                      className="px-3 py-1.5 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold shrink-0"
+                    >
+                      Link Bank
+                    </button>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {accounts.map((acc) => {
                     const isSelected = selectedAccountId === acc.id;
@@ -563,6 +582,7 @@ export const ScannerView: React.FC = () => {
                     );
                   })}
                 </div>
+                )}
               </div>
 
               {/* Extracted Transaction Rows */}
@@ -792,6 +812,20 @@ export const ScannerView: React.FC = () => {
                   Bank Account Used
                 </label>
 
+                {accounts.length === 0 ? (
+                  <div className="p-3.5 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-dashed border-black/[0.14] dark:border-white/[0.14] flex items-center justify-between gap-3">
+                    <span className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
+                      Link a bank account first before allotting receipt items.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openAccountModal()}
+                      className="px-3 py-1.5 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold shrink-0"
+                    >
+                      Link Bank
+                    </button>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {accounts.map((acc) => {
                     const isSelected = selectedAccountId === acc.id;
@@ -816,6 +850,7 @@ export const ScannerView: React.FC = () => {
                     );
                   })}
                 </div>
+                )}
               </div>
 
               {/* Line Items */}

@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Moon, Sun, SlidersHorizontal } from 'lucide-react';
 import { CURRENCY_REGISTRY } from '../../utils/currencies';
 import { StashLogo } from './StashLogo';
+import { PWAInstallButton } from './PWAInstallButton';
 
 export const MinimalHeader: React.FC = () => {
   const {
@@ -42,6 +43,7 @@ export const MinimalHeader: React.FC = () => {
 
       {/* Right: Clean Single-Row Utility Controls */}
       <div className="flex items-center gap-1.5 shrink-0">
+        <PWAInstallButton variant="compact" />
         <button
           onClick={() => openHoldConvertModal(netWorth.netWorth, activeCurrency)}
           className="h-9 px-3 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] hover:bg-black/[0.02] dark:hover:bg-white/[0.04] transition tabular-nums flex items-center gap-1.5"

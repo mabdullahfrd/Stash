@@ -43,7 +43,15 @@ import {
   setDoc,
   deleteDoc,
   writeBatch,
+  getDocs,
 } from 'firebase/firestore';
+import {
+  buildEmptyStarterState,
+  isUntouchedLegacyDemoSeed,
+  LEGACY_DEMO_ACCOUNT_IDS,
+  LEGACY_DEMO_PLEDGE_IDS,
+  LEGACY_DEMO_TRANSACTION_IDS,
+} from '../utils/accountStarter';
 import {
   DEFAULT_QUESTS,
   getLevelInfo,
@@ -117,6 +125,7 @@ interface FinanceContextType {
   deleteCharityPledge: (id: string) => Promise<void>;
 
   resetToDefaultData: () => Promise<void>;
+  clearAllDataToZero: () => Promise<void>;
   exportDataJSON: () => void;
   exportTransactionsCSV: () => void;
   importDataJSON: (jsonString: string) => boolean;
@@ -141,7 +150,8 @@ interface FinanceContextType {
   closeTransactionModal: () => void;
 
   isAccountModalOpen: boolean;
-  openAccountModal: () => void;
+  initialBankPresetId: string | null;
+  openAccountModal: (presetBankId?: string) => void;
   closeAccountModal: () => void;
 
   isSettingsModalOpen: boolean;
@@ -164,49 +174,48 @@ const STORAGE_KEYS = {
   QUESTS: 'stash_krw_quests_v5',
 };
 
+function readDemoOrEmpty<T>(key: string, fallback: T): T {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? (JSON.parse(saved) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, isOnline } = useAuth();
+  const { user, isGuest, isOnline } = useAuth();
   const [syncError, setSyncError] = useState<string | null>(null);
   const prevUserUidRef = useRef<string | null>(null);
 
-  // Accounts
+  // Real signed-in users ALWAYS start at ₩0 / empty state until Firestore loads their real linked banks.
+  // Demo Mode (isGuest && !user) loads local demo workspace data.
   const [accounts, setAccounts] = useState<Account[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-      return saved ? JSON.parse(saved) : INITIAL_ACCOUNTS;
-    } catch {
-      return INITIAL_ACCOUNTS;
+    if (!user && isGuest) {
+      return readDemoOrEmpty(STORAGE_KEYS.ACCOUNTS, INITIAL_ACCOUNTS);
     }
+    return [];
   });
 
   // Transactions
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
-      return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
-    } catch {
-      return INITIAL_TRANSACTIONS;
+    if (!user && isGuest) {
+      return readDemoOrEmpty(STORAGE_KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS);
     }
+    return [];
   });
 
   // Categories
   const [categories, setCategories] = useState<Category[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
-      return saved ? JSON.parse(saved) : INITIAL_CATEGORIES;
-    } catch {
-      return INITIAL_CATEGORIES;
-    }
+    return readDemoOrEmpty(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
   });
 
   // Charity Pledges
   const [charityPledges, setCharityPledges] = useState<CharityPledge[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.CHARITY);
-      return saved ? JSON.parse(saved) : INITIAL_CHARITY_PLEDGES;
-    } catch {
-      return INITIAL_CHARITY_PLEDGES;
+    if (!user && isGuest) {
+      return readDemoOrEmpty(STORAGE_KEYS.CHARITY, INITIAL_CHARITY_PLEDGES);
     }
+    return [];
   });
 
   // Primary Currency: Default is KRW
@@ -321,25 +330,41 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [initialTransactionType, setInitialTransactionType] = useState<TransactionType | undefined>();
   const [initialAccountId, setInitialAccountId] = useState<string | undefined>();
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [initialBankPresetId, setInitialBankPresetId] = useState<string | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
-  // Firestore Real-Time Listener for Authenticated User
+  // Firestore Real-Time Listener for Authenticated User (Zero auto-seeded demo balances!)
   useEffect(() => {
     if (!user) {
       if (prevUserUidRef.current) {
-        // User signed out: reset state back to local demo defaults
         prevUserUidRef.current = null;
         setSyncError(null);
-        setAccounts(INITIAL_ACCOUNTS);
-        setTransactions(INITIAL_TRANSACTIONS);
-        setCharityPledges(INITIAL_CHARITY_PLEDGES);
         setSelectedBankFilter(null);
+      }
+      if (isGuest) {
+        setAccounts(readDemoOrEmpty(STORAGE_KEYS.ACCOUNTS, INITIAL_ACCOUNTS));
+        setTransactions(readDemoOrEmpty(STORAGE_KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS));
+        setCharityPledges(readDemoOrEmpty(STORAGE_KEYS.CHARITY, INITIAL_CHARITY_PLEDGES));
+      } else {
+        const empty = buildEmptyStarterState();
+        setAccounts(empty.accounts);
+        setTransactions(empty.transactions);
+        setCharityPledges(empty.charityPledges);
       }
       return;
     }
 
     prevUserUidRef.current = user.uid;
     setSyncError(null);
+    setSelectedBankFilter(null);
+
+    // Load user-scoped offline cache (or start empty at ₩0 — never bleed Demo Mode balances)
+    const userAccountsKey = `stash_user_${user.uid}_accounts`;
+    const userTxsKey = `stash_user_${user.uid}_transactions`;
+    const userPledgesKey = `stash_user_${user.uid}_pledges`;
+    setAccounts(readDemoOrEmpty(userAccountsKey, []));
+    setTransactions(readDemoOrEmpty(userTxsKey, []));
+    setCharityPledges(readDemoOrEmpty(userPledgesKey, []));
 
     // Ensure /users/{uid} profile document is up to date
     upsertUserProfile(user, activeCurrency);
@@ -348,29 +373,50 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const txsPath = `users/${user.uid}/transactions`;
     const pledgesPath = `users/${user.uid}/charity_pledges`;
 
-    // Listen to accounts
+    let accountsLoaded = false;
+    let txsLoaded = false;
+    let latestAccounts: Account[] = [];
+    let latestTxs: Transaction[] = [];
+    let legacyCleanupRan = false;
+
+    const maybeCleanLegacyDemoSeed = async () => {
+      if (legacyCleanupRan || !accountsLoaded || !txsLoaded) return;
+      if (!isUntouchedLegacyDemoSeed(latestAccounts, latestTxs)) return;
+      legacyCleanupRan = true;
+
+      try {
+        const batch = writeBatch(db);
+        for (const acc of latestAccounts) {
+          if (LEGACY_DEMO_ACCOUNT_IDS.has(acc.id)) {
+            batch.delete(doc(db, 'users', user.uid, 'accounts', acc.id));
+          }
+        }
+        for (const tx of latestTxs) {
+          if (LEGACY_DEMO_TRANSACTION_IDS.has(tx.id)) {
+            batch.delete(doc(db, 'users', user.uid, 'transactions', tx.id));
+          }
+        }
+        for (const pledgeId of LEGACY_DEMO_PLEDGE_IDS) {
+          batch.delete(doc(db, 'users', user.uid, 'charity_pledges', pledgeId));
+        }
+        await batch.commit();
+      } catch (e) {
+        logFirestoreError(e, OperationType.DELETE, `users/${user.uid}`);
+      }
+    };
+
+    // Listen to accounts — empty stays empty (₩0) until the user links a bank
     const unsubAccounts = onSnapshot(
       collection(db, accountsPath),
-      async (snapshot) => {
+      (snapshot) => {
         setSyncError(null);
-        if (snapshot.empty) {
-          for (const acc of INITIAL_ACCOUNTS) {
-            try {
-              await setDoc(
-                doc(db, 'users', user.uid, 'accounts', acc.id),
-                sanitizeForFirestore({
-                  ...acc,
-                  userId: user.uid,
-                })
-              );
-            } catch (e) {
-              logFirestoreError(e, OperationType.WRITE, `${accountsPath}/${acc.id}`);
-            }
-          }
-        } else {
-          const cloudAccounts = snapshot.docs.map((d) => d.data() as Account);
-          setAccounts(cloudAccounts);
-        }
+        const cloudAccounts = snapshot.empty
+          ? []
+          : snapshot.docs.map((d) => d.data() as Account);
+        latestAccounts = cloudAccounts;
+        accountsLoaded = true;
+        setAccounts(cloudAccounts);
+        void maybeCleanLegacyDemoSeed();
       },
       (error) => {
         const info = logFirestoreError(error, OperationType.LIST, accountsPath);
@@ -378,29 +424,22 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     );
 
-    // Listen to transactions
+    // Listen to transactions — empty stays empty until the user adds entries
     const unsubTxs = onSnapshot(
       collection(db, txsPath),
-      async (snapshot) => {
-        if (snapshot.empty) {
-          for (const tx of INITIAL_TRANSACTIONS) {
-            try {
-              await setDoc(
-                doc(db, 'users', user.uid, 'transactions', tx.id),
-                sanitizeForFirestore({
-                  ...tx,
-                  userId: user.uid,
-                })
-              );
-            } catch (e) {
-              logFirestoreError(e, OperationType.WRITE, `${txsPath}/${tx.id}`);
-            }
-          }
-        } else {
-          const cloudTxs = snapshot.docs.map((d) => d.data() as Transaction);
-          cloudTxs.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
-          setTransactions(cloudTxs);
-        }
+      (snapshot) => {
+        const cloudTxs = snapshot.empty
+          ? []
+          : snapshot.docs.map((d) => d.data() as Transaction);
+        cloudTxs.sort(
+          (a, b) =>
+            new Date(b.date || b.createdAt).getTime() -
+            new Date(a.date || a.createdAt).getTime()
+        );
+        latestTxs = cloudTxs;
+        txsLoaded = true;
+        setTransactions(cloudTxs);
+        void maybeCleanLegacyDemoSeed();
       },
       (error) => {
         const info = logFirestoreError(error, OperationType.LIST, txsPath);
@@ -411,25 +450,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Listen to charity pledges
     const unsubPledges = onSnapshot(
       collection(db, pledgesPath),
-      async (snapshot) => {
-        if (snapshot.empty) {
-          for (const pledge of INITIAL_CHARITY_PLEDGES) {
-            try {
-              await setDoc(
-                doc(db, 'users', user.uid, 'charity_pledges', pledge.id),
-                sanitizeForFirestore({
-                  ...pledge,
-                  userId: user.uid,
-                })
-              );
-            } catch (e) {
-              logFirestoreError(e, OperationType.WRITE, `${pledgesPath}/${pledge.id}`);
-            }
-          }
-        } else {
-          const cloudPledges = snapshot.docs.map((d) => d.data() as CharityPledge);
-          setCharityPledges(cloudPledges);
-        }
+      (snapshot) => {
+        const cloudPledges = snapshot.empty
+          ? []
+          : snapshot.docs.map((d) => d.data() as CharityPledge);
+        setCharityPledges(cloudPledges);
       },
       (error) => {
         logFirestoreError(error, OperationType.LIST, pledgesPath);
@@ -441,7 +466,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       unsubTxs();
       unsubPledges();
     };
-  }, [user]);
+  }, [user, isGuest]);
 
   // Theme synchronization with documentElement
   useEffect(() => {
@@ -452,22 +477,34 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [theme]);
 
-  // Local storage persistence (always keeps offline copy)
+  // Local storage persistence (strictly scoped: signed-in cache vs Demo Mode)
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(accounts));
-  }, [accounts]);
+    if (user) {
+      localStorage.setItem(`stash_user_${user.uid}_accounts`, JSON.stringify(accounts));
+    } else if (isGuest) {
+      localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(accounts));
+    }
+  }, [accounts, user, isGuest]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(transactions));
-  }, [transactions]);
+    if (user) {
+      localStorage.setItem(`stash_user_${user.uid}_transactions`, JSON.stringify(transactions));
+    } else if (isGuest) {
+      localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(transactions));
+    }
+  }, [transactions, user, isGuest]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
   }, [categories]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.CHARITY, JSON.stringify(charityPledges));
-  }, [charityPledges]);
+    if (user) {
+      localStorage.setItem(`stash_user_${user.uid}_pledges`, JSON.stringify(charityPledges));
+    } else if (isGuest) {
+      localStorage.setItem(STORAGE_KEYS.CHARITY, JSON.stringify(charityPledges));
+    }
+  }, [charityPledges, user, isGuest]);
 
   const setActiveCurrency = (curr: CurrencyCode) => {
     setActiveCurrencyState(curr);
@@ -878,38 +915,43 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const clearAllDataToZero = async () => {
+    const empty = buildEmptyStarterState();
+    setAccounts(empty.accounts);
+    setTransactions(empty.transactions);
+    setCharityPledges(empty.charityPledges);
+    setSelectedBankFilter(null);
+
+    if (user) {
+      try {
+        const [accSnap, txSnap, pledgeSnap] = await Promise.all([
+          getDocs(collection(db, `users/${user.uid}/accounts`)),
+          getDocs(collection(db, `users/${user.uid}/transactions`)),
+          getDocs(collection(db, `users/${user.uid}/charity_pledges`)),
+        ]);
+        const batch = writeBatch(db);
+        accSnap.forEach((d) => batch.delete(d.ref));
+        txSnap.forEach((d) => batch.delete(d.ref));
+        pledgeSnap.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      } catch (e) {
+        logFirestoreError(e, OperationType.DELETE, `users/${user.uid}`);
+      }
+    }
+  };
+
   const resetToDefaultData = async () => {
+    if (user) {
+      await clearAllDataToZero();
+      return;
+    }
+
     setAccounts(INITIAL_ACCOUNTS);
     setTransactions(INITIAL_TRANSACTIONS);
     setCategories(INITIAL_CATEGORIES);
     setCharityPledges(INITIAL_CHARITY_PLEDGES);
     setActiveCurrencyState('KRW');
     setSelectedBankFilter(null);
-
-    if (user) {
-      try {
-        for (const acc of INITIAL_ACCOUNTS) {
-          await setDoc(
-            doc(db, 'users', user.uid, 'accounts', acc.id),
-            sanitizeForFirestore({ ...acc, userId: user.uid })
-          );
-        }
-        for (const tx of INITIAL_TRANSACTIONS) {
-          await setDoc(
-            doc(db, 'users', user.uid, 'transactions', tx.id),
-            sanitizeForFirestore({ ...tx, userId: user.uid })
-          );
-        }
-        for (const p of INITIAL_CHARITY_PLEDGES) {
-          await setDoc(
-            doc(db, 'users', user.uid, 'charity_pledges', p.id),
-            sanitizeForFirestore({ ...p, userId: user.uid })
-          );
-        }
-      } catch (e) {
-        logFirestoreError(e, OperationType.WRITE, `users/${user.uid}`);
-      }
-    }
   };
 
   const exportDataJSON = () => {
@@ -996,8 +1038,14 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setInitialAccountId(undefined);
   };
 
-  const openAccountModal = () => setIsAccountModalOpen(true);
-  const closeAccountModal = () => setIsAccountModalOpen(false);
+  const openAccountModal = (presetBankId?: string) => {
+    setInitialBankPresetId(presetBankId || null);
+    setIsAccountModalOpen(true);
+  };
+  const closeAccountModal = () => {
+    setIsAccountModalOpen(false);
+    setInitialBankPresetId(null);
+  };
 
   const openSettingsModal = () => setIsSettingsModalOpen(true);
   const closeSettingsModal = () => setIsSettingsModalOpen(false);
@@ -1033,6 +1081,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         fulfillCharityPledge,
         deleteCharityPledge,
         resetToDefaultData,
+        clearAllDataToZero,
         exportDataJSON,
         exportTransactionsCSV,
         importDataJSON,
@@ -1062,6 +1111,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         openTransactionModal,
         closeTransactionModal,
         isAccountModalOpen,
+        initialBankPresetId,
         openAccountModal,
         closeAccountModal,
         isSettingsModalOpen,

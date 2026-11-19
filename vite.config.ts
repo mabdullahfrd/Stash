@@ -1,8 +1,8 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
-import {VitePWA} from 'vite-plugin-pwa';
+import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
@@ -11,32 +11,54 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        includeAssets: [
+          'icon.svg',
+          'apple-touch-icon.png',
+          'pwa-192x192.png',
+          'pwa-512x512.png',
+          'pwa-maskable-512x512.png',
+        ],
         devOptions: {
           enabled: true,
+          type: 'module',
         },
         workbox: {
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         },
         manifest: {
           id: '/',
           name: 'Stash — Personal Finance Tracker',
           short_name: 'Stash',
-          description: 'Personal finance tracker in Korean Won with multi-currency and cloud sync.',
-          theme_color: '#F2F2F7',
-          background_color: '#000000',
+          description:
+            'Personal finance tracker in Korean Won with multi-currency and cloud sync.',
+          theme_color: '#141617',
+          background_color: '#0D0F0C',
           display: 'standalone',
           start_url: '/',
           scope: '/',
           icons: [
             {
-              src: '/icon.svg',
+              src: '/pwa-192x192.png',
               sizes: '192x192',
-              type: 'image/svg+xml',
+              type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/icon.svg',
+              src: '/pwa-512x512.png',
               sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: '/pwa-maskable-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+            {
+              src: '/icon.svg',
+              sizes: 'any',
               type: 'image/svg+xml',
               purpose: 'any',
             },

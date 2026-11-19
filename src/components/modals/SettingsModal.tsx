@@ -14,11 +14,13 @@ import {
   Sun,
   Download,
   RotateCcw,
+  Trash2,
   Check,
   User,
   ShieldCheck,
   ChevronRight,
 } from 'lucide-react';
+import { PWAInstallButton } from '../common/PWAInstallButton';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -32,6 +34,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     theme,
     setTheme,
     resetToDefaultData,
+    clearAllDataToZero,
     exportDataJSON,
     exportTransactionsCSV,
   } = useFinance();
@@ -178,6 +181,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
           {/* Data Actions */}
           <div className="pt-3 border-t border-black/[0.06] dark:border-white/[0.07] space-y-2">
+            <PWAInstallButton variant="card" />
+
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={exportTransactionsCSV}
@@ -196,15 +201,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </div>
 
             <button
-              onClick={() => {
-                resetToDefaultData();
+              type="button"
+              onClick={async () => {
+                await clearAllDataToZero();
                 onClose();
               }}
-              className="w-full py-2.5 px-3 rounded-xl border border-black/[0.07] dark:border-white/[0.08] hover:bg-black/[0.02] dark:hover:bg-white/[0.04] text-xs font-medium text-[#6B7268] dark:text-[#8E9689] flex items-center justify-center gap-1.5 transition"
+              className="w-full py-2.5 px-3 rounded-xl border border-rose-500/25 hover:bg-rose-500/10 text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center justify-center gap-1.5 transition"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Reset Demo Data (KRW)
+              <Trash2 className="w-3.5 h-3.5" />
+              {user ? 'Start Fresh (Clear All to ₩0)' : 'Clear All to ₩0'}
             </button>
+
+            {!user && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await resetToDefaultData();
+                  onClose();
+                }}
+                className="w-full py-2.5 px-3 rounded-xl border border-black/[0.07] dark:border-white/[0.08] hover:bg-black/[0.02] dark:hover:bg-white/[0.04] text-xs font-medium text-[#6B7268] dark:text-[#8E9689] flex items-center justify-center gap-1.5 transition"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset Demo Data (KRW)
+              </button>
+            )}
           </div>
         </div>
       </div>

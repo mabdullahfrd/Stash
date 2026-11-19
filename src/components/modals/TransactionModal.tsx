@@ -35,6 +35,7 @@ export const TransactionModal: React.FC = () => {
     accountBalances,
     categories,
     activeCurrency,
+    openAccountModal,
   } = useFinance();
 
   const [type, setType] = useState<TransactionType>('expense');
@@ -374,6 +375,23 @@ export const TransactionModal: React.FC = () => {
               {type === 'transfer' ? 'From Account' : 'Bank Account Used'}
             </label>
 
+            {accounts.length === 0 ? (
+              <div className="p-3.5 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-dashed border-black/[0.14] dark:border-white/[0.14] flex items-center justify-between gap-3">
+                <span className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
+                  Link a bank account first to log transactions.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeTransactionModal();
+                    openAccountModal();
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold shrink-0"
+                >
+                  Link Bank
+                </button>
+              </div>
+            ) : (
             <div className="grid grid-cols-2 gap-2">
               {accounts.map((acc) => {
                 const isSelected = accountId === acc.id;
@@ -410,6 +428,7 @@ export const TransactionModal: React.FC = () => {
                 );
               })}
             </div>
+            )}
 
             {selectedAccount && selectedBankInfo && (
               <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689] flex items-center gap-1.5">

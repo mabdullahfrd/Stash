@@ -163,9 +163,14 @@ export const PocketsView: React.FC = () => {
                   <span className="text-xs font-medium text-white/60">
                     Total Balance
                   </span>
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#C8EC45]">
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                    2.4% this week
+                  <span
+                    className={`inline-flex items-center gap-1 text-[11px] font-semibold ${
+                      accounts.length === 0 ? 'text-white/50' : 'text-[#C8EC45]'
+                    }`}
+                  >
+                    {accounts.length === 0
+                      ? 'Ready to link'
+                      : `${transactions.length} ${transactions.length === 1 ? 'entry' : 'entries'} logged`}
                   </span>
                 </div>
 
@@ -174,11 +179,27 @@ export const PocketsView: React.FC = () => {
                     <HoldAmount amount={netWorth.netWorth} currency={activeCurrency} />
                   </div>
                   <div className="flex items-center gap-2 text-[11px] text-white/50 font-mono mt-2">
-                    <span>{primaryAccount?.accountNumber || '•••• 4921'}</span>
-                    <span>·</span>
-                    <span>{accounts.length} linked accounts</span>
-                    <span>·</span>
-                    <span>{activeCurrency}</span>
+                    {accounts.length === 0 ? (
+                      <>
+                        <span>No bank accounts linked</span>
+                        <span>·</span>
+                        <span>{activeCurrency}</span>
+                      </>
+                    ) : (
+                      <>
+                        {primaryAccount?.accountNumber && (
+                          <>
+                            <span>{primaryAccount.accountNumber}</span>
+                            <span>·</span>
+                          </>
+                        )}
+                        <span>
+                          {accounts.length} {accounts.length === 1 ? 'linked account' : 'linked accounts'}
+                        </span>
+                        <span>·</span>
+                        <span>{activeCurrency}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -222,7 +243,7 @@ export const PocketsView: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={openAccountModal}
+                  onClick={() => openAccountModal()}
                   className="flex flex-col items-center gap-2 group"
                 >
                   <div className="w-12 h-12 rounded-full bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] flex items-center justify-center text-[#111315] dark:text-[#F4F5F0] group-hover:border-black/20 dark:group-hover:border-white/20 transition active:scale-95">
@@ -236,24 +257,69 @@ export const PocketsView: React.FC = () => {
 
               {/* Linked Bank Accounts */}
               <div className="rounded-[24px] bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <h2 className="text-sm font-bold tracking-tight text-[#111315] dark:text-[#F4F5F0]">
                       Bank Accounts
                     </h2>
                     <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689] mt-0.5">
-                      Select an account to view its activity or add an entry
+                      {accounts.length === 0
+                        ? 'Link your own bank accounts to begin tracking balances and spending'
+                        : 'Select an account to view its activity or add an entry'}
                     </p>
                   </div>
-                  <button
-                    onClick={openAccountModal}
-                    className="px-3 py-1.5 rounded-xl bg-[#F4F5F0] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] transition flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Link Bank</span>
-                  </button>
+                  {accounts.length > 0 && (
+                    <button
+                      onClick={() => openAccountModal()}
+                      className="px-3 py-1.5 rounded-xl bg-[#F4F5F0] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] transition flex items-center gap-1 whitespace-nowrap shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5 shrink-0" />
+                      <span className="whitespace-nowrap">Link Bank</span>
+                    </button>
+                  )}
                 </div>
 
+                {accounts.length === 0 ? (
+                  <div className="rounded-2xl bg-[#F9FAF7] dark:bg-[#121511] border border-dashed border-black/[0.12] dark:border-white/[0.12] p-5 text-center space-y-4">
+                    <div className="w-11 h-11 rounded-2xl bg-[#141617] dark:bg-[#C8EC45] text-[#C8EC45] dark:text-[#111315] flex items-center justify-center mx-auto">
+                      <Building2 className="w-5 h-5 stroke-[1.8]" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-bold text-[#111315] dark:text-[#F4F5F0]">
+                        Link your first bank account
+                      </h3>
+                      <p className="text-xs text-[#6B7268] dark:text-[#8E9689] max-w-sm mx-auto">
+                        Your ledger starts cleanly at ₩0. Connect Hana Bank, Toss Bank, or any wallet you use.
+                      </p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => openAccountModal('hana')}
+                        className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] hover:border-black/20 dark:hover:border-white/25 text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] flex items-center justify-center gap-2 transition"
+                      >
+                        <BankLogo bank={findBankPreset('hana')} size="sm" />
+                        <span>Link Hana Bank</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openAccountModal('toss')}
+                        className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] hover:border-black/20 dark:hover:border-white/25 text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] flex items-center justify-center gap-2 transition"
+                      >
+                        <BankLogo bank={findBankPreset('toss')} size="sm" />
+                        <span>Link Toss Bank</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openAccountModal()}
+                        className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl bg-[#141617] hover:bg-[#23272A] dark:bg-[#C8EC45] dark:hover:bg-[#B8DE35] text-white dark:text-[#111315] text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Other Bank</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {accounts.map((acc) => {
                     const balance = accountBalances[acc.id] ?? acc.balance;
@@ -323,6 +389,7 @@ export const PocketsView: React.FC = () => {
                     );
                   })}
                 </div>
+                )}
 
                 {selectedFilteredAccount && (
                   <div className="px-3.5 py-2.5 rounded-xl bg-[#F4F5F0] dark:bg-white/[0.05] flex items-center justify-between gap-2 text-xs">
@@ -346,17 +413,18 @@ export const PocketsView: React.FC = () => {
                         <Plus className="w-3 h-3" />
                         <span>Add</span>
                       </button>
-                      {accounts.length > 2 && (
-                        <button
-                          type="button"
-                          onClick={() => deleteAccount(selectedFilteredAccount.id)}
-                          className="p-1 rounded-lg text-[#8E9689] hover:text-rose-500 transition"
-                          aria-label={`Remove ${selectedFilteredAccount.name}`}
-                          title="Unlink account"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          deleteAccount(selectedFilteredAccount.id);
+                          setSelectedBankFilter(null);
+                        }}
+                        className="p-1 rounded-lg text-[#8E9689] hover:text-rose-500 transition"
+                        aria-label={`Remove ${selectedFilteredAccount.name}`}
+                        title="Unlink account"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => setSelectedBankFilter(null)}
@@ -426,7 +494,9 @@ export const PocketsView: React.FC = () => {
                   </div>
 
                   <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689] pt-3 border-t border-black/[0.05] dark:border-white/[0.06] mt-3">
-                    Peak spending on {weeklyChartData.highestDay.full} ({formatCurrency(weeklyChartData.highestDay.amount, activeCurrency)})
+                    {weeklyChartData.highestDay.amount > 0
+                      ? `Peak spending on ${weeklyChartData.highestDay.full} (${formatCurrency(weeklyChartData.highestDay.amount, activeCurrency)})`
+                      : 'No expenses logged this week yet.'}
                   </p>
                 </div>
               </div>
@@ -447,7 +517,11 @@ export const PocketsView: React.FC = () => {
 
                 {recentTransactions.length === 0 ? (
                   <p className="text-xs text-[#8E9689] py-6 text-center">
-                    No activity recorded for this filter.
+                    {accounts.length === 0
+                      ? 'No transactions yet. Link a bank account or add an entry.'
+                      : selectedBankFilter
+                      ? 'No activity recorded for this account.'
+                      : 'No transactions logged yet.'}
                   </p>
                 ) : (
                   <div className="divide-y divide-black/[0.05] dark:divide-white/[0.06]">
@@ -742,6 +816,11 @@ export const PocketsView: React.FC = () => {
                   </span>
                 </div>
 
+                {bankActivity.length === 0 ? (
+                  <p className="text-xs text-[#8E9689] py-6 text-center">
+                    Link a bank account to view per-bank cash flow.
+                  </p>
+                ) : (
                 <div className="divide-y divide-black/[0.05] dark:divide-white/[0.06]">
                   {bankActivity.map((b) => (
                     <div
@@ -771,6 +850,7 @@ export const PocketsView: React.FC = () => {
                     </div>
                   ))}
                 </div>
+                )}
               </div>
 
               {/* Item-Weighted Spending by Category */}

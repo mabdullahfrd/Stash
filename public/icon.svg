@@ -1,8 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <rect width="512" height="512" rx="128" fill="#007AFF"/>
-  <circle cx="256" cy="256" r="160" stroke="#FFFFFF" stroke-width="24" stroke-opacity="0.3"/>
-  <path d="M170 330 C 190 230, 230 180, 342 180" stroke="#FFFFFF" stroke-width="28" stroke-linecap="round"/>
-  <path d="M170 256 C 240 256, 290 280, 342 332" stroke="#34C759" stroke-width="28" stroke-linecap="round"/>
-  <circle cx="342" cy="180" r="16" fill="#FFFFFF"/>
-  <circle cx="342" cy="332" r="16" fill="#34C759"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="120" fill="#141617"/>
+  <g transform="translate(70 70) scale(15.5)">
+    <path d="M5.5 6.5C5.5 5.39543 6.39543 4.5 7.5 4.5H17.5C18.0523 4.5 18.5 4.94772 18.5 5.5V7.5C18.5 8.60457 17.6046 9.5 16.5 9.5H8.5C6.84315 9.5 5.5 8.15685 5.5 6.5Z" fill="#C8EC45"/>
+    <path d="M5.5 12C5.5 10.6193 6.61929 9.5 8 9.5H16C17.3807 9.5 18.5 10.6193 18.5 12C18.5 13.3807 17.3807 14.5 16 14.5H8C6.61929 14.5 5.5 13.3807 5.5 12Z" fill="#FFFFFF" fill-opacity="0.92"/>
+    <path d="M5.5 16.5C5.5 15.3954 6.39543 14.5 7.5 14.5H15.5C17.1569 14.5 18.5 15.8431 18.5 17.5C18.5 18.6046 17.6046 19.5 16.5 19.5H6.5C5.94772 19.5 5.5 19.0523 5.5 18.5V16.5Z" fill="#C8EC45"/>
+    <circle cx="15.75" cy="12" r="1.15" fill="#141617"/>
+  </g>
 </svg>
