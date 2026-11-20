@@ -329,11 +329,13 @@ export function normalizeBankScreenshotOutput(
 
 export class SlidingWindowRateLimiter {
   private readonly hits = new Map<string, number[]>();
+  private readonly maxRequests: number;
+  private readonly windowMs: number;
 
-  constructor(
-    private readonly maxRequests: number = 20,
-    private readonly windowMs: number = 60 * 60 * 1000
-  ) {}
+  constructor(maxRequests: number = 20, windowMs: number = 60 * 60 * 1000) {
+    this.maxRequests = maxRequests;
+    this.windowMs = windowMs;
+  }
 
   check(
     key: string,
@@ -357,4 +359,64 @@ export class SlidingWindowRateLimiter {
       retryAfterSeconds: 0,
     };
   }
+}
+
+export function parseModelJsonResponse(rawText: string | undefined): {
+  ok: true;
+  data: unknown;
+} | {
+  ok: false;
+  error: unknown;
+} {
+  let cleaned = (rawText || '{}').trim();
+  const fenceMatch = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(cleaned);
+  if (fenceMatch) {
+    cleaned = fenceMatch[1].trim();
+  }
+  try {
+    return { ok: true, data: JSON.parse(cleaned || '{}') };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+
+export function classifyGeminiApiError(
+  err: unknown,
+  featureLabel: 'Receipt' | 'Screenshot'
+): { status: number; message: string } {
+  const anyErr = err as { status?: number; code?: string | number; message?: string } | null;
+  const status = typeof anyErr?.status === 'number' ? anyErr.status : undefined;
+  const msg = typeof anyErr?.message === 'string' ? anyErr.message.toUpperCase() : '';
+
+  if (status === 429 || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('QUOTA')) {
+    return {
+      status: 429,
+      message: `${featureLabel} scanning is temporarily busy due to AI rate limits. Please wait a minute and try again.`,
+    };
+  }
+
+  if (
+    status === 401 ||
+    status === 403 ||
+    msg.includes('API_KEY_INVALID') ||
+    msg.includes('PERMISSION_DENIED') ||
+    msg.includes('API KEY')
+  ) {
+    return {
+      status: 503,
+      message: `${featureLabel} scanning is temporarily unavailable. Check that GEMINI_API_KEY is valid on the server.`,
+    };
+  }
+
+  if (status === 404 || msg.includes('NOT_FOUND')) {
+    return {
+      status: 502,
+      message: `${featureLabel} analysis model is temporarily unavailable. Please try again shortly.`,
+    };
+  }
+
+  return {
+    status: 502,
+    message: `${featureLabel} analysis could not be completed right now. Please try again shortly.`,
+  };
 }

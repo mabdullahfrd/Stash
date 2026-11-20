@@ -6,8 +6,10 @@
 import React, { Suspense, lazy, useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FinanceProvider, useFinanceUI } from './context/FinanceContext';
+import { PWAUpdateProvider } from './context/PWAUpdateContext';
 import { DeviceFrame } from './components/shell/DeviceFrame';
 import { TabBar } from './components/navigation/TabBar';
+import { PWAUpdateBanner } from './components/common/PWAUpdateBanner';
 import { TransactionModal } from './components/modals/TransactionModal';
 import { IncomeCharityModal } from './components/modals/IncomeCharityModal';
 import { AccountModal } from './components/modals/AccountModal';
@@ -114,10 +116,13 @@ const AppContent: React.FC = () => {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <FinanceProvider>
-        <AppContent />
-      </FinanceProvider>
-    </AuthProvider>
+    <PWAUpdateProvider>
+      <AuthProvider>
+        <FinanceProvider>
+          <AppContent />
+          <PWAUpdateBanner />
+        </FinanceProvider>
+      </AuthProvider>
+    </PWAUpdateProvider>
   );
 }

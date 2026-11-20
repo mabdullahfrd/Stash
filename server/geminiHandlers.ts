@@ -9,8 +9,10 @@ import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import {
+  classifyGeminiApiError,
   normalizeBankScreenshotOutput,
   normalizeReceiptOutput,
+  parseModelJsonResponse,
   SlidingWindowRateLimiter,
   validateBankScreenshotRequest,
   validateScanReceiptRequest,
@@ -34,10 +36,12 @@ function resolveProjectId(): string | undefined {
   if (process.env.FIREBASE_PROJECT_ID) {
     return process.env.FIREBASE_PROJECT_ID;
   }
-  const candidatePaths = [
-    new URL('../firebase-applet-config.json', import.meta.url),
-    path.resolve(process.cwd(), 'firebase-applet-config.json'),
-  ];
+  const candidatePaths: Array<URL | string> = [];
+  if (typeof import.meta !== 'undefined' && import.meta.url) {
+    candidatePaths.push(new URL('../firebase-applet-config.json', import.meta.url));
+  }
+  candidatePaths.push(path.resolve(process.cwd(), 'firebase-applet-config.json'));
+
   for (const configPath of candidatePaths) {
     try {
       if (fs.existsSync(configPath)) {
@@ -55,10 +59,16 @@ function getFirebaseAdminAuth() {
   if (getApps().length === 0) {
     const serviceAccountRaw = process.env.FIREBASE_SERVICE_ACCOUNT;
     if (serviceAccountRaw) {
-      const serviceAccount = JSON.parse(serviceAccountRaw);
-      initializeApp({
-        credential: cert(serviceAccount),
-      });
+      try {
+        const serviceAccount = JSON.parse(serviceAccountRaw);
+        initializeApp({
+          credential: cert(serviceAccount),
+        });
+      } catch (err) {
+        console.error('Invalid FIREBASE_SERVICE_ACCOUNT JSON, falling back to projectId:', err);
+        const projectId = resolveProjectId();
+        initializeApp(projectId ? { projectId } : undefined);
+      }
     } else {
       const projectId = resolveProjectId();
       initializeApp(projectId ? { projectId } : undefined);
@@ -211,17 +221,15 @@ Allowed category names:
       },
     });
 
-    let rawParsed: unknown;
-    try {
-      rawParsed = JSON.parse((response.text || '{}').trim());
-    } catch (parseErr) {
-      console.error('Receipt scan JSON.parse error:', parseErr);
+    const parsedJson = parseModelJsonResponse(response.text);
+    if (!parsedJson.ok) {
+      console.error('Receipt scan JSON.parse error:', parsedJson.error);
       return res.status(502).json({
         error: 'Could not read the structured receipt response. Please try again with a clearer image.',
       });
     }
 
-    const normalized = normalizeReceiptOutput(rawParsed, today, targetCurrency, merchantHint);
+    const normalized = normalizeReceiptOutput(parsedJson.data, today, targetCurrency, merchantHint);
     if (!normalized) {
       return res.status(422).json({
         error: 'Could not detect clear line items in this receipt image. Please try a sharper photo or add items manually.',
@@ -231,8 +239,9 @@ Allowed category names:
     return res.status(200).json(normalized);
   } catch (error: unknown) {
     console.error('Receipt scan error:', error);
-    return res.status(502).json({
-      error: 'Receipt analysis could not be completed right now. Please try again shortly.',
+    const classified = classifyGeminiApiError(error, 'Receipt');
+    return res.status(classified.status).json({
+      error: classified.message,
     });
   }
 }
@@ -318,17 +327,15 @@ Rules:
       },
     });
 
-    let rawParsed: unknown;
-    try {
-      rawParsed = JSON.parse((response.text || '{}').trim());
-    } catch (parseErr) {
-      console.error('Bank screenshot JSON.parse error:', parseErr);
+    const parsedJson = parseModelJsonResponse(response.text);
+    if (!parsedJson.ok) {
+      console.error('Bank screenshot JSON.parse error:', parsedJson.error);
       return res.status(502).json({
         error: 'Could not read the structured screenshot response. Please try again with a clearer image.',
       });
     }
 
-    const normalized = normalizeBankScreenshotOutput(rawParsed, today, targetCurrency);
+    const normalized = normalizeBankScreenshotOutput(parsedJson.data, today, targetCurrency);
     if (!normalized) {
       return res.status(422).json({
         error: 'No payment rows were detected in this screenshot. Make sure the transaction list and amounts are legible.',
@@ -338,8 +345,9 @@ Rules:
     return res.status(200).json(normalized);
   } catch (error: unknown) {
     console.error('Bank screenshot parse error:', error);
-    return res.status(502).json({
-      error: 'Screenshot analysis could not be completed right now. Please try again shortly.',
+    const classified = classifyGeminiApiError(error, 'Screenshot');
+    return res.status(classified.status).json({
+      error: classified.message,
     });
   }
 }

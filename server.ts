@@ -132,9 +132,26 @@ if (process.env.NODE_ENV !== 'production') {
 
   app.use(vite.middlewares);
 } else {
-  app.use(express.static(path.resolve(__dirname, 'dist')));
+  const distDir = path.resolve(__dirname, 'dist');
+  app.use(
+    express.static(distDir, {
+      setHeaders: (res, filePath) => {
+        const fileName = path.basename(filePath);
+        if (
+          fileName === 'sw.js' ||
+          fileName === 'registerSW.js' ||
+          fileName === 'manifest.webmanifest' ||
+          fileName === 'index.html' ||
+          fileName.startsWith('workbox-')
+        ) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+      },
+    })
+  );
   app.get('*', (_req, res) => {
-    res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.resolve(distDir, 'index.html'));
   });
 }
 

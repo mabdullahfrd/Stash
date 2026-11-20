@@ -10,6 +10,7 @@ import {
   useGamification,
 } from '../../context/FinanceContext';
 import { useAuth } from '../../context/AuthContext';
+import { usePWAUpdate } from '../../context/PWAUpdateContext';
 import { CurrencyCode } from '../../types/finance';
 import { CURRENCY_REGISTRY } from '../../utils/currencies';
 import { parseBackupJson, ValidatedBackupData } from '../../utils/backupSchema';
@@ -58,6 +59,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const { soundEffectsEnabled, setSoundEffectsEnabled } = useGamification();
 
   const { user, isOnline, openAuthModal, deleteAccountAndData } = useAuth();
+  const { buildId, updateStatus, checkForUpdates, applyUpdate } = usePWAUpdate();
   const titleId = useId();
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [isDeleteAccountConfirmOpen, setIsDeleteAccountConfirmOpen] = useState(false);
@@ -313,9 +315,55 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </button>
             </div>
 
-            {/* Data Actions */}
+            {/* Data & App Actions */}
             <div className="pt-3 border-t border-black/[0.06] dark:border-white/[0.07] space-y-2">
               <PWAInstallButton variant="card" />
+
+              <div className="p-3 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="block text-xs font-semibold text-[#111315] dark:text-[#F4F5F0]">
+                    App Updates
+                  </span>
+                  <span className="block text-[11px] text-[#6B7268] dark:text-[#8E9689] truncate">
+                    {updateStatus === 'checking'
+                      ? 'Checking for updates…'
+                      : updateStatus === 'updating'
+                        ? 'Downloading latest version…'
+                        : updateStatus === 'ready'
+                          ? 'New version ready to load'
+                          : updateStatus === 'up-to-date'
+                            ? `Up to date · ${buildId}`
+                            : updateStatus === 'offline'
+                              ? 'Offline — connect to check'
+                              : updateStatus === 'error'
+                                ? 'Could not check right now'
+                                : `Auto-updates enabled · ${buildId}`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  disabled={updateStatus === 'checking' || updateStatus === 'updating'}
+                  onClick={() =>
+                    void (updateStatus === 'ready' ? applyUpdate() : checkForUpdates())
+                  }
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-white dark:bg-white/[0.08] border border-black/[0.07] dark:border-white/[0.08] hover:border-black/15 dark:hover:border-white/20 text-[11px] font-semibold text-[#111315] dark:text-[#F4F5F0] flex items-center gap-1.5 transition disabled:opacity-50"
+                >
+                  <RefreshCw
+                    className={`w-3 h-3 ${
+                      updateStatus === 'checking' || updateStatus === 'updating'
+                        ? 'animate-spin'
+                        : ''
+                    }`}
+                  />
+                  <span>
+                    {updateStatus === 'ready'
+                      ? 'Refresh'
+                      : updateStatus === 'checking'
+                        ? 'Checking'
+                        : 'Check'}
+                  </span>
+                </button>
+              </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <button

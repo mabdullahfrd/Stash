@@ -6,8 +6,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  classifyGeminiApiError,
   normalizeBankScreenshotOutput,
   normalizeReceiptOutput,
+  parseModelJsonResponse,
   SlidingWindowRateLimiter,
   validateBankScreenshotRequest,
   validateScanReceiptRequest,
@@ -141,4 +143,25 @@ test('SlidingWindowRateLimiter caps per-user requests within window and recovers
 
   // After window elapses, user-1 is allowed again
   assert.equal(limiter.check('user-1', t0 + 61_000).allowed, true);
+});
+
+test('parseModelJsonResponse strips optional markdown code fences before JSON.parse', () => {
+  const fenced = parseModelJsonResponse('```json\n{"merchant":"Emart","items":[]}\n```');
+  assert.equal(fenced.ok, true);
+  if (fenced.ok) {
+    assert.deepEqual(fenced.data, { merchant: 'Emart', items: [] });
+  }
+
+  const invalid = parseModelJsonResponse('not json at all');
+  assert.equal(invalid.ok, false);
+});
+
+test('classifyGeminiApiError maps quota and key errors to friendly status codes without leaking raw details', () => {
+  const quota = classifyGeminiApiError({ status: 429, message: 'RESOURCE_EXHAUSTED raw secret' }, 'Receipt');
+  assert.equal(quota.status, 429);
+  assert.equal(quota.message.includes('raw secret'), false);
+
+  const keyErr = classifyGeminiApiError({ status: 403, message: 'API_KEY_INVALID xyz' }, 'Screenshot');
+  assert.equal(keyErr.status, 503);
+  assert.equal(keyErr.message.includes('xyz'), false);
 });

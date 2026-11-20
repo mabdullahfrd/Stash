@@ -123,6 +123,7 @@ export const ScannerView: React.FC = () => {
       return false;
     }
   });
+  const hasGeminiConsentRef = useRef(hasGeminiConsent);
   const [consentDialogMode, setConsentDialogMode] = useState<'bank' | 'receipt' | null>(null);
   const bankFileInputRef = useRef<HTMLInputElement | null>(null);
   const receiptFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -174,10 +175,37 @@ export const ScannerView: React.FC = () => {
   }, [selectedAccount?.id, transactions]);
 
   const handleFileInputClick = (e: React.MouseEvent<HTMLInputElement>, mode: 'bank' | 'receipt') => {
-    if (user && !hasGeminiConsent) {
+    if (user && !hasGeminiConsentRef.current) {
       e.preventDefault();
       setConsentDialogMode(mode);
     }
+  };
+
+  const readApiJsonSafely = async (response: Response, fallbackError: string) => {
+    const rawText = await response.text();
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : {};
+    } catch {
+      parsed = {};
+    }
+    if (!response.ok) {
+      const serverError = typeof parsed.error === 'string' && parsed.error ? parsed.error : null;
+      if (serverError) {
+        return { ok: false as const, data: parsed, error: serverError };
+      }
+      if (response.status === 413) {
+        return { ok: false as const, data: parsed, error: 'Image is too large for upload. Please try a smaller photo.' };
+      }
+      if (response.status === 401) {
+        return { ok: false as const, data: parsed, error: 'Your sign-in session expired. Please sign in again.' };
+      }
+      if (response.status === 504) {
+        return { ok: false as const, data: parsed, error: 'The AI scan timed out on the server. Please try a clearer photo.' };
+      }
+      return { ok: false as const, data: parsed, error: fallbackError };
+    }
+    return { ok: true as const, data: parsed };
   };
 
   // --- Bank Screenshot Handlers ---
@@ -235,11 +263,19 @@ export const ScannerView: React.FC = () => {
           signal: controller.signal,
         });
 
-        const data = await response.json();
-        if (!response.ok) {
-          setScreenshotError(data.error || 'Could not extract transactions from this screenshot.');
+        const apiResult = await readApiJsonSafely(
+          response,
+          'Could not extract transactions from this screenshot.'
+        );
+        if (!apiResult.ok) {
+          setScreenshotError(apiResult.error);
           return;
         }
+        const data = apiResult.data as {
+          bankHint?: string;
+          bankName?: string;
+          entries?: RawBankScreenshotEntry[];
+        };
 
         const matchedAccountId = detectBankAccountFromHint(data.bankHint || data.bankName, activeAccounts);
         const targetAcc = activeAccounts.find((a) => a.id === matchedAccountId) || selectedAccount;
@@ -442,11 +478,21 @@ export const ScannerView: React.FC = () => {
           signal: controller.signal,
         });
 
-        const data = await response.json();
-        if (!response.ok) {
-          setReceiptError(data.error || 'Could not extract items from this receipt image.');
+        const apiResult = await readApiJsonSafely(
+          response,
+          'Could not extract items from this receipt image.'
+        );
+        if (!apiResult.ok) {
+          setReceiptError(apiResult.error);
           return;
         }
+        const data = apiResult.data as {
+          merchant?: string;
+          date?: string;
+          currency?: string;
+          totalAmount?: number;
+          items?: Array<{ name: string; price: number; category: string }>;
+        };
 
         const respCurrency: CurrencyCode =
           data.currency === 'USD' || data.currency === 'EUR' || data.currency === 'KRW' || data.currency === 'PKR'
@@ -465,7 +511,7 @@ export const ScannerView: React.FC = () => {
 
         if (data.items && Array.isArray(data.items) && data.items.length > 0) {
           setItems(
-            data.items.map((it: { name: string; price: number; category: string }) => ({
+            data.items.map((it) => ({
               id: generateId('ai'),
               name: it.name,
               price: roundCurrencyAmount(Math.abs(Number(it.price)) || 0, respCurrency),
@@ -473,6 +519,8 @@ export const ScannerView: React.FC = () => {
             }))
           );
           completeScannerQuest();
+        } else {
+          setReceiptError('No line items were detected in this receipt image. Try a sharper photo or add items manually.');
         }
       } finally {
         clearTimeout(timeoutId);
@@ -1257,15 +1305,14 @@ export const ScannerView: React.FC = () => {
         confirmLabel="I understand, continue"
         onConfirm={() => {
           const targetMode = consentDialogMode;
+          hasGeminiConsentRef.current = true;
           setHasGeminiConsent(true);
           try {
             localStorage.setItem(GEMINI_CONSENT_STORAGE_KEY, 'true');
           } catch {}
           setConsentDialogMode(null);
-          setTimeout(() => {
-            if (targetMode === 'bank') bankFileInputRef.current?.click();
-            if (targetMode === 'receipt') receiptFileInputRef.current?.click();
-          }, 0);
+          if (targetMode === 'bank') bankFileInputRef.current?.click();
+          if (targetMode === 'receipt') receiptFileInputRef.current?.click();
         }}
         onCancel={() => setConsentDialogMode(null)}
       />
