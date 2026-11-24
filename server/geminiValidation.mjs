@@ -17,7 +17,8 @@ export const ALLOWED_BANK_HINTS = new Set(['auto', 'toss', 'hana', 'other']);
 
 export const ALLOWED_EXPENSE_CATEGORIES = new Set([
   'Groceries (Eggs, Bread, Milk)',
-  'Coffee & Drinks',
+  'Coffee',
+  'Drinks & Beverages',
   'Ice Cream',
   'Treats & Snacks',
   'Dining & Takeout',
@@ -51,6 +52,8 @@ export const ALLOWED_INCOME_CATEGORIES = new Set([
 ]);
 
 const ICE_CREAM_ITEM_REGEX = /(ice\s*cream|gelato|bingsu|baskin|haagen|sorbet|popsicle|sundae|melona|배스킨|아이스크림|메로나|빙수)/i;
+const COFFEE_ITEM_REGEX = /(coffee|latte|americano|espresso|cappuccino|macchiato|mocha|cold\s*brew|starbucks|mega\s*coffee|커피|라떼|아메리카노|콜드브루|에스프레소|스타벅스|메가커피)/i;
+const DRINK_ITEM_REGEX = /(drinks?|beverages?|tea|matcha|boba|bubble\s*tea|gong\s*cha|smoothie|juice|lemonade|ade|soda|cola|coca\s*cola|coke|pepsi|sprite|energy\s*drink|red\s*bull|monster|gatorade|pocari|음료|주스|스무디|버블티|공차|녹차|홍차|말차|콜라|사이다|탄산|에이드|포카리)/i;
 
 /**
  * @param {string} rawCategory
@@ -64,6 +67,11 @@ function resolveValidatedCategory(rawCategory, itemOrMerchant, type) {
   }
   if (rawCategory === 'Ice Cream & Treats') {
     return ICE_CREAM_ITEM_REGEX.test(itemOrMerchant) ? 'Ice Cream' : 'Treats & Snacks';
+  }
+  if (rawCategory === 'Coffee & Drinks') {
+    return DRINK_ITEM_REGEX.test(itemOrMerchant) && !COFFEE_ITEM_REGEX.test(itemOrMerchant)
+      ? 'Drinks & Beverages'
+      : 'Coffee';
   }
   return ALLOWED_EXPENSE_CATEGORIES.has(rawCategory) ? rawCategory : 'Uncategorized';
 }

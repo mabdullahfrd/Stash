@@ -15,6 +15,12 @@ test('Auto-categorizes common grocery, coffee, treat, dining, study, and transit
   const coffee = inferCategoryForItem('Mega Coffee Iced Latte', INITIAL_CATEGORIES, 'expense');
   assert.equal(coffee?.categoryId, 'cat-coffee');
 
+  const drink = inferCategoryForItem('Orange Juice & Iced Tea', INITIAL_CATEGORIES, 'expense');
+  assert.equal(drink?.categoryId, 'cat-drinks');
+
+  const soda = inferCategoryForItem('Coca Cola Zero', INITIAL_CATEGORIES, 'expense');
+  assert.equal(soda?.categoryId, 'cat-drinks');
+
   const iceCream = inferCategoryForItem('Baskin Robbins pint', INITIAL_CATEGORIES, 'expense');
   assert.equal(iceCream?.categoryId, 'cat-icecream');
 

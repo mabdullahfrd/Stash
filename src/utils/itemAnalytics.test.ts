@@ -25,6 +25,7 @@ test('computeItemTypeAnalytics splits itemized receipts accurately and groups it
         { id: '1', name: 'Grade-A Eggs 10pk', price: 4500, category: 'Groceries (Eggs, Bread, Milk)' },
         { id: '2', name: 'Iced Vanilla Latte', price: 5500, category: 'Coffee & Drinks' },
         { id: '3', name: 'Haagen-Dazs Vanilla', price: 8000, category: 'Ice Cream & Treats' },
+        { id: '4', name: 'Fresh Mango Smoothie', price: 4000, category: 'Coffee & Drinks' },
       ],
       createdAt: '2026-11-10T12:00:00Z',
       updatedAt: '2026-11-10T12:00:00Z',
@@ -43,6 +44,9 @@ test('computeItemTypeAnalytics splits itemized receipts accurately and groups it
     },
   ];
 
+  // Adjust tx-emart amount so scale remains 1 (4500 + 5500 + 8000 + 4000 = 22000)
+  transactions[0].amount = 22000;
+
   const summary = computeItemTypeAnalytics(
     transactions,
     INITIAL_CATEGORIES,
@@ -50,14 +54,21 @@ test('computeItemTypeAnalytics splits itemized receipts accurately and groups it
     DEFAULT_EXCHANGE_RATES
   );
 
-  assert.equal(summary.totalSpent, 22500);
-  assert.equal(summary.totalItemCount, 4);
+  assert.equal(summary.totalSpent, 26500);
+  assert.equal(summary.totalItemCount, 5);
 
-  // Coffee & Drinks should have 5500 (from Emart receipt) + 4500 (direct entry) = 10000
+  // Coffee should have 5500 (from Emart receipt) + 4500 (direct entry) = 10000
   const coffeeCat = summary.categoryBreakdowns.find((c) => c.categoryId === 'cat-coffee');
   assert.ok(coffeeCat);
+  assert.equal(coffeeCat.categoryName, 'Coffee');
   assert.equal(coffeeCat.totalAmount, 10000);
   assert.equal(coffeeCat.itemCount, 2);
+
+  // Legacy 'Coffee & Drinks' Mango Smoothie resolves to 'cat-drinks' (Drinks & Beverages)
+  const drinksCat = summary.categoryBreakdowns.find((c) => c.categoryId === 'cat-drinks');
+  assert.ok(drinksCat);
+  assert.equal(drinksCat.categoryName, 'Drinks & Beverages');
+  assert.equal(drinksCat.totalAmount, 4000);
 
   // Latte item group should combine both lattes into count=2, total=10000, avg=5000
   const latteGroup = summary.itemGroups.find((g) => g.normalizedKey === 'latte');

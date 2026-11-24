@@ -108,11 +108,15 @@ function mergeCategories(stored: Category[] | null): Category[] {
   const baseList = Array.isArray(stored) && stored.length > 0 ? stored : INITIAL_CATEGORIES;
   const cleaned = baseList
     .filter((c) => c.id !== 'cat-transfer')
-    .map((c) =>
-      c.id === 'cat-icecream' && c.name === 'Ice Cream & Treats'
-        ? { ...c, name: 'Ice Cream', icon: 'IceCream', color: '#FF2D55' }
-        : c
-    );
+    .map((c) => {
+      if (c.id === 'cat-icecream' && c.name === 'Ice Cream & Treats') {
+        return { ...c, name: 'Ice Cream', icon: 'IceCream', color: '#FF2D55' };
+      }
+      if (c.id === 'cat-coffee' && c.name === 'Coffee & Drinks') {
+        return { ...c, name: 'Coffee', icon: 'Coffee', color: '#FF9500' };
+      }
+      return c;
+    });
   const byId = new Map(cleaned.map((c) => [c.id, c]));
   const canonicalIds = new Set(INITIAL_CATEGORIES.map((c) => c.id));
   const ordered: Category[] = INITIAL_CATEGORIES.map((cat) => byId.get(cat.id) || cat);

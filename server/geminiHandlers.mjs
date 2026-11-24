@@ -188,7 +188,8 @@ Extract the store merchant name, date (YYYY-MM-DD, fallback to ${today} if uncle
 Primary currency: ${targetCurrency}.
 Allowed category names:
 - "Groceries (Eggs, Bread, Milk)" (eggs, bread, milk, produce, convenience groceries)
-- "Coffee & Drinks" (coffee, latte, americano, tea, juice, cafe drinks)
+- "Coffee" (espresso, latte, americano, cold brew, cafe coffee runs)
+- "Drinks & Beverages" (tea, matcha, boba, juice, smoothies, soda, energy drinks, bottled drinks)
 - "Ice Cream" (ice cream, gelato, bingsu, popsicles, soft serve, Baskin Robbins)
 - "Treats & Snacks" (cookies, chocolate, cake, macarons, donuts, pastries, candy, chips)
 - "Dining & Takeout" (meals, restaurant food, delivery, takeout)
@@ -313,7 +314,7 @@ Rules:
 - Amounts in banking apps may look like "-4,500원" or "4,500원 출금" (expense) or "+120,000원" or "입금" (income). Return "amount" as a positive number and set "type" to "expense" or "income".
 - Parse dates into YYYY-MM-DD (assume year ${today.slice(0, 4)} if month/day like "11.14" or "11월 14일" is shown; fallback to ${today} if no date appears).
 - Assign "category" from:
-  Expense: "Groceries (Eggs, Bread, Milk)", "Coffee & Drinks", "Ice Cream", "Treats & Snacks", "Dining & Takeout", "Study & Uni Gear", "Transit & Metro", "Travel & Flights", "Bills & Rent", "Subscriptions", "Health", "Fitness & Sports", "Beauty & Personal Care", "Entertainment & Events", "Shopping", "Tech & Software", "Household & Laundry", "Gifts & Occasions", "Savings & Goals", "Charity & Giving", "Uncategorized".
+  Expense: "Groceries (Eggs, Bread, Milk)", "Coffee", "Drinks & Beverages", "Ice Cream", "Treats & Snacks", "Dining & Takeout", "Study & Uni Gear", "Transit & Metro", "Travel & Flights", "Bills & Rent", "Subscriptions", "Health", "Fitness & Sports", "Beauty & Personal Care", "Entertainment & Events", "Shopping", "Tech & Software", "Household & Laundry", "Gifts & Occasions", "Savings & Goals", "Charity & Giving", "Uncategorized".
   Income: "Work Placement & Salary", "Tutoring & Campus Job", "Allowance & Inflow", "Freelance & Side Gig", "Scholarship & Grants", "Interest & Dividends", "Refunds & Cashback", "Uncategorized".
 - Primary currency fallback: ${targetCurrency}. Optional user hint: ${bankHint}.`;
 

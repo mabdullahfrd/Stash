@@ -6,6 +6,7 @@
 import React from 'react';
 import {
   Coffee,
+  CupSoda,
   ShoppingBag,
   ShoppingCart,
   IceCreamCone,
@@ -76,8 +77,53 @@ export function resolveTransactionIcon({
   if (query.includes('savings') || query.includes('piggybank') || query.includes('emergency fund')) {
     return PiggyBank;
   }
-  if (query.includes('coffee') || query.includes('latte') || query.includes('cafe') || query.includes('drink') || query.includes('메가커피')) {
+  const categoryQuery = `${categoryName} ${categoryIcon}`.toLowerCase();
+  if (categoryQuery.includes('cupsoda') || categoryQuery.includes('drinks') || categoryQuery.includes('beverage')) {
+    return CupSoda;
+  }
+  if (categoryQuery.trim() === 'coffee' || categoryQuery.includes('coffee')) {
     return Coffee;
+  }
+  if (
+    query.includes('coffee') ||
+    query.includes('latte') ||
+    query.includes('americano') ||
+    query.includes('espresso') ||
+    query.includes('cappuccino') ||
+    query.includes('macchiato') ||
+    query.includes('mocha') ||
+    query.includes('cafe') ||
+    query.includes('메가커피') ||
+    query.includes('커피') ||
+    query.includes('라떼') ||
+    query.includes('아메리카노')
+  ) {
+    return Coffee;
+  }
+  if (
+    query.includes('drinks') ||
+    query.includes('beverage') ||
+    query.includes('cupsoda') ||
+    query.includes('soda') ||
+    query.includes('cola') ||
+    query.includes('coke') ||
+    query.includes('sprite') ||
+    query.includes('juice') ||
+    query.includes('smoothie') ||
+    query.includes('boba') ||
+    query.includes('bubble tea') ||
+    query.includes('tea') ||
+    query.includes('matcha') ||
+    query.includes('lemonade') ||
+    query.includes('energy drink') ||
+    query.includes('red bull') ||
+    query.includes('drink') ||
+    query.includes('음료') ||
+    query.includes('주스') ||
+    query.includes('콜라') ||
+    query.includes('에이드')
+  ) {
+    return CupSoda;
   }
   if (query.includes('ice cream') || query.includes('icecream') || query.includes('baskin') || query.includes('haagen') || query.includes('bingsu') || query.includes('gelato') || query.includes('메로나') || query.includes('배스킨')) {
     return IceCreamCone;

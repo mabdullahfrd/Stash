@@ -44,16 +44,17 @@ const SAMPLE_RECEIPTS = [
     items: [
       { id: '1', name: 'Fresh Grade-A Eggs (신선 계란 10구)', price: 4500, category: 'Groceries (Eggs, Bread, Milk)' },
       { id: '2', name: 'Milk Toast Bread (우유 식빵)', price: 3800, category: 'Groceries (Eggs, Bread, Milk)' },
-      { id: '3', name: 'Iced Vanilla Latte (바닐라 라떼)', price: 5500, category: 'Coffee & Drinks' },
+      { id: '3', name: 'Iced Vanilla Latte (바닐라 라떼)', price: 5500, category: 'Coffee' },
       { id: '4', name: 'Baskin Cup (배스킨라빈스)', price: 4200, category: 'Ice Cream' },
     ],
   },
   {
-    name: 'Mega Coffee & Treats',
+    name: 'Mega Coffee, Drinks & Treats',
     merchant: 'Mega MGC Coffee (메가커피)',
     items: [
-      { id: '1', name: 'Mega Iced Americano (메가 아메리카노)', price: 3000, category: 'Coffee & Drinks' },
-      { id: '2', name: 'Strawberry Macaron (딸기 마카롱)', price: 3500, category: 'Treats & Snacks' },
+      { id: '1', name: 'Mega Iced Americano (메가 아메리카노)', price: 3000, category: 'Coffee' },
+      { id: '2', name: 'Fresh Mango Smoothie (망고 스무디)', price: 3900, category: 'Drinks & Beverages' },
+      { id: '3', name: 'Strawberry Macaron (딸기 마카롱)', price: 3500, category: 'Treats & Snacks' },
     ],
   },
   {
@@ -79,6 +80,7 @@ const SAMPLE_BANK_SCREENSHOTS: Array<{
     bankName: 'Toss Bank (토스뱅크)',
     entries: [
       { merchant: 'Mega Coffee Iced Latte (메가커피)', amount: 4500, type: 'expense', date: '2026-11-14', notes: 'Toss Pay card' },
+      { merchant: 'Gong Cha Brown Sugar Bubble Tea (공차)', amount: 5300, type: 'expense', date: '2026-11-14', notes: 'Toss Pay card' },
       { merchant: 'GS25 Fresh Eggs & Milk (GS25)', amount: 6200, type: 'expense', date: '2026-11-14', notes: 'Toss QR pay' },
       { merchant: 'Seoul Metro T-Money (교통카드)', amount: 1550, type: 'expense', date: '2026-11-13', notes: 'Transit auto-charge' },
       { merchant: 'Baemin Chicken Bowl (배달의민족)', amount: 16900, type: 'expense', date: '2026-11-12', notes: 'Toss Pay' },

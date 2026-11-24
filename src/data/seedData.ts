@@ -44,7 +44,8 @@ export const INITIAL_CATEGORIES: Category[] = [
 
   // Expenses
   { id: 'cat-groceries', name: 'Groceries (Eggs, Bread, Milk)', type: 'expense', icon: 'ShoppingCart', color: '#34C759' },
-  { id: 'cat-coffee', name: 'Coffee & Drinks', type: 'expense', icon: 'Coffee', color: '#FF9500' },
+  { id: 'cat-coffee', name: 'Coffee', type: 'expense', icon: 'Coffee', color: '#FF9500' },
+  { id: 'cat-drinks', name: 'Drinks & Beverages', type: 'expense', icon: 'CupSoda', color: '#06B6D4' },
   { id: 'cat-icecream', name: 'Ice Cream', type: 'expense', icon: 'IceCream', color: '#FF2D55' },
   { id: 'cat-treats', name: 'Treats & Snacks', type: 'expense', icon: 'Cookie', color: '#F97316' },
   { id: 'cat-dining', name: 'Dining & Takeout', type: 'expense', icon: 'Utensils', color: '#AF52DE' },
@@ -140,7 +141,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     receiptItems: [
       { id: 'item-1', name: 'Grade-A Eggs 10pk (신선 특란)', price: 4500, category: 'Groceries (Eggs, Bread, Milk)' },
       { id: 'item-2', name: 'Milk Toast Sourdough (우유 식빵)', price: 3800, category: 'Groceries (Eggs, Bread, Milk)' },
-      { id: 'item-3', name: 'Cold Brew Oat Latte (콜드브루 라떼)', price: 5500, category: 'Coffee & Drinks' },
+      { id: 'item-3', name: 'Cold Brew Oat Latte (콜드브루 라떼)', price: 5500, category: 'Coffee' },
       { id: 'item-4', name: 'Haagen-Dazs Vanilla Cup (하겐다즈)', price: 4200, category: 'Ice Cream' },
     ],
     createdAt: '2026-11-02T14:15:00Z',

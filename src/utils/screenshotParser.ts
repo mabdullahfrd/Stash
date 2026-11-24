@@ -123,9 +123,13 @@ export function normalizeParsedBankEntries(
           ? raw.date.trim()
           : defaultDate;
 
-      // First run keyword auto-categorizer on merchant + raw category hint
+      const rawCatLower = (raw.category || '').trim().toLowerCase();
+      const isLegacyMergedCategory =
+        rawCatLower === 'ice cream & treats' || rawCatLower === 'coffee & drinks';
+
+      // First run keyword auto-categorizer on merchant (+ non-legacy category hint)
       const inferred = inferCategoryForItem(
-        `${cleanMerchant} ${raw.category || ''}`,
+        isLegacyMergedCategory ? cleanMerchant : `${cleanMerchant} ${raw.category || ''}`,
         categories,
         txType
       );
@@ -135,7 +139,6 @@ export function normalizeParsedBankEntries(
         : undefined;
 
       if (!matchedCategory && raw.category) {
-        const rawCatLower = raw.category.toLowerCase();
         matchedCategory = categories.find(
           (c) =>
             c.type === txType &&

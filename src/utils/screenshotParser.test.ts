@@ -25,6 +25,7 @@ test('normalizeParsedBankEntries auto-categorizes Toss spending items and uses U
   const parsed = normalizeParsedBankEntries(
     [
       { merchant: '스타벅스 아메리카노', amount: -4500, type: 'expense', date: '2026-11-15' },
+      { merchant: '공차 버블티', amount: -5300, type: 'expense', date: '2026-11-15', category: 'Coffee & Drinks' },
       { merchant: '이마트24 계란 우유', amount: 8200, type: 'expense', date: '2026-11-15' },
       { merchant: '지하철 티머니', amount: 1550, type: 'expense' },
       { merchant: 'Peer Tutoring Deposit', amount: 80000, type: 'income', date: '2026-11-14' },
@@ -35,15 +36,16 @@ test('normalizeParsedBankEntries auto-categorizes Toss spending items and uses U
     '2026-11-16'
   );
 
-  assert.equal(parsed.length, 5);
+  assert.equal(parsed.length, 6);
   assert.equal(parsed[0].categoryId, 'cat-coffee');
   assert.equal(parsed[0].amount, 4500);
-  assert.equal(parsed[1].categoryId, 'cat-groceries');
-  assert.equal(parsed[2].categoryId, 'cat-transit');
-  assert.equal(parsed[2].date, '2026-11-16');
-  assert.equal(parsed[3].type, 'income');
-  assert.equal(parsed[3].categoryId, 'cat-tutoring');
-  assert.equal(parsed[4].categoryId, 'cat-uncategorized');
+  assert.equal(parsed[1].categoryId, 'cat-drinks');
+  assert.equal(parsed[2].categoryId, 'cat-groceries');
+  assert.equal(parsed[3].categoryId, 'cat-transit');
+  assert.equal(parsed[3].date, '2026-11-16');
+  assert.equal(parsed[4].type, 'income');
+  assert.equal(parsed[4].categoryId, 'cat-tutoring');
+  assert.equal(parsed[5].categoryId, 'cat-uncategorized');
 });
 
 test('markDuplicateParsedEntries flags matching existing transactions and unselects them', () => {

@@ -86,10 +86,10 @@ test('normalizeReceiptOutput enforces non-negative finite prices, category allow
       currency: 'XYZ',
       date: 'invalid-date',
       items: [
-        { name: 'Latte', price: 4500, category: 'Coffee & Drinks' },
+        { name: 'Latte', price: 4500, category: 'Coffee' },
         { name: 'Unknown Gadget', price: 12000, category: 'Made Up Category' },
-        { name: 'Broken Negative', price: -100, category: 'Coffee & Drinks' },
-        { name: 'Broken NaN', price: Number.NaN, category: 'Coffee & Drinks' },
+        { name: 'Broken Negative', price: -100, category: 'Coffee' },
+        { name: 'Broken NaN', price: Number.NaN, category: 'Coffee' },
       ],
     },
     '2026-11-20',
@@ -100,14 +100,14 @@ test('normalizeReceiptOutput enforces non-negative finite prices, category allow
   assert.equal(normalized.currency, 'KRW');
   assert.equal(normalized.date, '2026-11-20');
   assert.equal(normalized.items.length, 2);
-  assert.equal(normalized.items[0].category, 'Coffee & Drinks');
+  assert.equal(normalized.items[0].category, 'Coffee');
   assert.equal(normalized.items[1].category, 'Uncategorized');
   assert.equal(normalized.totalAmount, 16500);
 
   const splitNormalized = normalizeReceiptOutput(
     {
-      merchant: 'Dessert Shop',
-      totalAmount: 19000,
+      merchant: 'Dessert & Cafe Shop',
+      totalAmount: 26500,
       currency: 'KRW',
       date: '2026-11-20',
       items: [
@@ -115,6 +115,8 @@ test('normalizeReceiptOutput enforces non-negative finite prices, category allow
         { name: 'Strawberry Macaron', price: 3500, category: 'Treats & Snacks' },
         { name: 'Melona Ice Cream Bar', price: 1500, category: 'Ice Cream & Treats' },
         { name: 'Chocolate Cookie', price: 3000, category: 'Ice Cream & Treats' },
+        { name: 'Iced Americano', price: 3000, category: 'Coffee & Drinks' },
+        { name: 'Mango Smoothie', price: 4500, category: 'Coffee & Drinks' },
         { name: 'Gym Day Pass', price: 6000, category: 'Fitness & Sports' },
       ],
     },
@@ -124,7 +126,7 @@ test('normalizeReceiptOutput enforces non-negative finite prices, category allow
   assert.ok(splitNormalized);
   assert.deepEqual(
     splitNormalized.items.map((it) => it.category),
-    ['Ice Cream', 'Treats & Snacks', 'Ice Cream', 'Treats & Snacks', 'Fitness & Sports']
+    ['Ice Cream', 'Treats & Snacks', 'Ice Cream', 'Treats & Snacks', 'Coffee', 'Drinks & Beverages', 'Fitness & Sports']
   );
 });
 
@@ -135,7 +137,8 @@ test('normalizeBankScreenshotOutput validates entries and falls back unknown cat
       bankHint: 'toss',
       currency: 'KRW',
       entries: [
-        { merchant: 'Mega Coffee', amount: 4500, type: 'expense', date: '2026-11-19', category: 'Coffee & Drinks' },
+        { merchant: 'Mega Coffee', amount: 4500, type: 'expense', date: '2026-11-19', category: 'Coffee' },
+        { merchant: 'Gong Cha Bubble Tea', amount: 5300, type: 'expense', date: '2026-11-19', category: 'Drinks & Beverages' },
         { merchant: 'Mystery Store', amount: 15000, type: 'expense', date: 'bad-date', category: 'Random' },
         { merchant: 'Upwork Freelance', amount: 250000, type: 'income', date: '2026-11-19', category: 'Freelance & Side Gig' },
         { merchant: 'Merit Grant', amount: 500000, type: 'income', date: '2026-11-19', category: 'Scholarship & Grants' },
@@ -147,11 +150,13 @@ test('normalizeBankScreenshotOutput validates entries and falls back unknown cat
   );
 
   assert.ok(normalized);
-  assert.equal(normalized.entries.length, 4);
-  assert.equal(normalized.entries[1].category, 'Uncategorized');
-  assert.equal(normalized.entries[1].date, '2026-11-20');
-  assert.equal(normalized.entries[2].category, 'Freelance & Side Gig');
-  assert.equal(normalized.entries[3].category, 'Scholarship & Grants');
+  assert.equal(normalized.entries.length, 5);
+  assert.equal(normalized.entries[0].category, 'Coffee');
+  assert.equal(normalized.entries[1].category, 'Drinks & Beverages');
+  assert.equal(normalized.entries[2].category, 'Uncategorized');
+  assert.equal(normalized.entries[2].date, '2026-11-20');
+  assert.equal(normalized.entries[3].category, 'Freelance & Side Gig');
+  assert.equal(normalized.entries[4].category, 'Scholarship & Grants');
 });
 
 test('SlidingWindowRateLimiter caps per-user requests within window and recovers after expiry', () => {

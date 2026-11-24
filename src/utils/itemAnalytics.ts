@@ -80,8 +80,11 @@ function resolveCategoryForReceiptItem(
 ): Category | undefined {
   const normalizedLabel = itemCategoryLabel.trim().toLowerCase();
 
-  // Exact or close match first (excluding legacy merged label so it splits accurately)
-  if (normalizedLabel && normalizedLabel !== 'ice cream & treats') {
+  const isLegacyMerged =
+    normalizedLabel === 'ice cream & treats' || normalizedLabel === 'coffee & drinks';
+
+  // Exact or close match first (excluding legacy merged labels so they split accurately)
+  if (normalizedLabel && !isLegacyMerged) {
     const byLabel = categories.find(
       (c) =>
         c.type === 'expense' &&
@@ -92,7 +95,7 @@ function resolveCategoryForReceiptItem(
     if (byLabel) return byLabel;
   }
 
-  // Infer from itemName first so legacy 'Ice Cream & Treats' items split cleanly
+  // Infer from itemName first so legacy merged items split cleanly
   const inferredByName = inferCategoryForItem(itemName, categories, 'expense');
   if (inferredByName) {
     return categories.find((c) => c.id === inferredByName.categoryId);
@@ -102,6 +105,13 @@ function resolveCategoryForReceiptItem(
     return (
       categories.find((c) => c.id === 'cat-icecream') ||
       categories.find((c) => c.id === 'cat-treats')
+    );
+  }
+
+  if (normalizedLabel === 'coffee & drinks') {
+    return (
+      categories.find((c) => c.id === 'cat-coffee') ||
+      categories.find((c) => c.id === 'cat-drinks')
     );
   }
 
