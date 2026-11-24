@@ -288,16 +288,18 @@ export async function deleteUserAccountAndData(password?: string): Promise<void>
   }
 
   const uid = currentUser.uid;
-  const [accSnap, txSnap, pledgeSnap] = await Promise.all([
+  const [accSnap, txSnap, pledgeSnap, savingsSnap] = await Promise.all([
     getDocs(collection(db, `users/${uid}/accounts`)),
     getDocs(collection(db, `users/${uid}/transactions`)),
     getDocs(collection(db, `users/${uid}/charity_pledges`)),
+    getDocs(collection(db, `users/${uid}/savings_goals`)),
   ]);
 
   const refs: DocumentReference[] = [
     ...accSnap.docs.map((d) => d.ref),
     ...txSnap.docs.map((d) => d.ref),
     ...pledgeSnap.docs.map((d) => d.ref),
+    ...savingsSnap.docs.map((d) => d.ref),
     doc(db, 'users', uid),
   ];
 

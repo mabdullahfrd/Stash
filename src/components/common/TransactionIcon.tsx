@@ -7,17 +7,35 @@ import React from 'react';
 import {
   Coffee,
   ShoppingBag,
+  ShoppingCart,
   IceCreamCone,
+  Cookie,
   Utensils,
   BookOpen,
   TrainFront,
   HeartHandshake,
+  Heart,
   ArrowLeftRight,
   Briefcase,
   GraduationCap,
   ArrowUpRight,
   ArrowDownRight,
   Receipt,
+  PiggyBank,
+  Dumbbell,
+  Sparkles,
+  Film,
+  Plane,
+  Smartphone,
+  Home,
+  Gift,
+  Stethoscope,
+  Repeat,
+  Laptop,
+  Award,
+  TrendingUp,
+  RotateCcw,
+  Tag,
 } from 'lucide-react';
 import { TransactionType } from '../../types/finance';
 
@@ -55,13 +73,52 @@ export function resolveTransactionIcon({
   if (type === 'transfer' || query.includes('transfer')) {
     return ArrowLeftRight;
   }
+  if (query.includes('savings') || query.includes('piggybank') || query.includes('emergency fund')) {
+    return PiggyBank;
+  }
   if (query.includes('coffee') || query.includes('latte') || query.includes('cafe') || query.includes('drink') || query.includes('메가커피')) {
     return Coffee;
   }
-  if (query.includes('ice cream') || query.includes('icecream') || query.includes('baskin') || query.includes('treat') || query.includes('macaron') || query.includes('배스킨')) {
+  if (query.includes('ice cream') || query.includes('icecream') || query.includes('baskin') || query.includes('haagen') || query.includes('bingsu') || query.includes('gelato') || query.includes('메로나') || query.includes('배스킨')) {
     return IceCreamCone;
   }
+  if (query.includes('treats') || query.includes('snack') || query.includes('cookie') || query.includes('macaron') || query.includes('chocolate') || query.includes('cake') || query.includes('donut') || query.includes('candy')) {
+    return Cookie;
+  }
+  if (query.includes('fitness') || query.includes('dumbbell') || query.includes('gym') || query.includes('pilates')) {
+    return Dumbbell;
+  }
+  if (query.includes('health') || query.includes('stethoscope') || query.includes('pharmacy') || query.includes('clinic')) {
+    return Stethoscope;
+  }
+  if (query.includes('beauty') || query.includes('sparkles') || query.includes('skincare') || query.includes('olive young')) {
+    return Sparkles;
+  }
+  if (query.includes('entertainment') || query.includes('film') || query.includes('cinema') || query.includes('movie') || query.includes('concert')) {
+    return Film;
+  }
+  if (query.includes('travel') || query.includes('plane') || query.includes('flight') || query.includes('hotel')) {
+    return Plane;
+  }
+  if (query.includes('tech') || query.includes('smartphone') || query.includes('software') || query.includes('macbook')) {
+    return Smartphone;
+  }
+  if (query.includes('household') || query.includes('laundry') || query.includes('home')) {
+    return Home;
+  }
+  if (query.includes('gift') || query.includes('occasions')) {
+    return Gift;
+  }
+  if (query.includes('subscription') || query.includes('repeat') || query.includes('netflix') || query.includes('spotify')) {
+    return Repeat;
+  }
+  if (query.includes('bills') || query.includes('rent')) {
+    return Receipt;
+  }
   if (query.includes('grocer') || query.includes('emart') || query.includes('shoppingcart') || query.includes('egg') || query.includes('bread') || query.includes('milk') || query.includes('mart') || query.includes('cu ') || query.includes('gs25')) {
+    return ShoppingCart;
+  }
+  if (query.includes('shoppingbag') || query.includes('shopping')) {
     return ShoppingBag;
   }
   if (query.includes('dining') || query.includes('utensil') || query.includes('takeout') || query.includes('meal') || query.includes('food')) {
@@ -73,11 +130,29 @@ export function resolveTransactionIcon({
   if (query.includes('transit') || query.includes('metro') || query.includes('bus') || query.includes('subway') || query.includes('t-money')) {
     return TrainFront;
   }
+  if (query.includes('freelance') || query.includes('laptop')) {
+    return Laptop;
+  }
+  if (query.includes('scholarship') || query.includes('grant') || query.includes('award')) {
+    return Award;
+  }
+  if (query.includes('dividend') || query.includes('interest') || query.includes('trendingup')) {
+    return TrendingUp;
+  }
+  if (query.includes('refund') || query.includes('cashback') || query.includes('rotateccw')) {
+    return RotateCcw;
+  }
   if (query.includes('placement') || query.includes('salary') || query.includes('stipend') || query.includes('briefcase')) {
     return Briefcase;
   }
   if (query.includes('tutor') || query.includes('graduation') || query.includes('campus')) {
     return GraduationCap;
+  }
+  if (query.includes('allowance') || query.includes('inflow') || query.includes('heart')) {
+    return Heart;
+  }
+  if (query.includes('uncategorized') || query.includes('tag')) {
+    return Tag;
   }
   if (hasReceipt) {
     return Receipt;

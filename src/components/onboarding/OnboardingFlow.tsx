@@ -23,7 +23,7 @@ const PREVIEW_CURRENCIES: CurrencyCode[] = ['KRW', 'USD', 'EUR', 'PKR'];
 const TOSS_SAMPLE_ROWS = [
   { name: 'Mega Coffee Vanilla Latte', category: 'Coffee & Drinks', amount: '-₩4,500' },
   { name: 'Emart Everyday (이마트)', category: 'Groceries', amount: '-₩18,000' },
-  { name: 'Baskin Robbins', category: 'Ice Cream & Treats', amount: '-₩5,200' },
+  { name: 'Baskin Robbins', category: 'Ice Cream', amount: '-₩5,200' },
 ];
 
 const RECEIPT_SAMPLE_ROWS = [

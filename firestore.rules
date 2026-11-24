@@ -78,7 +78,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'id', 'userId', 'type', 'amount', 'toAmount', 'currency', 'date',
           'categoryId', 'accountId', 'toAccountId', 'merchant', 'notes',
-          'receiptItems', 'isCharity', 'charityPledgeId', 'createdAt', 'updatedAt'
+          'receiptItems', 'isCharity', 'charityPledgeId', 'savingsGoalId', 'createdAt', 'updatedAt'
         ])
         && data.id is string && data.id == transactionId
         && data.userId is string && data.userId == userId && data.userId == request.auth.uid
@@ -95,6 +95,7 @@ service cloud.firestore {
         && (!('receiptItems' in data) || isValidReceiptItems(data.receiptItems))
         && (!('isCharity' in data) || data.isCharity is bool)
         && (!('charityPledgeId' in data) || (data.charityPledgeId is string && data.charityPledgeId.size() <= 128))
+        && (!('savingsGoalId' in data) || (data.savingsGoalId is string && data.savingsGoalId.size() <= 128))
         && data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 64
         && data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 64;
     }
@@ -115,6 +116,26 @@ service cloud.firestore {
         && (!('dueDate' in data) || (data.dueDate is string && data.dueDate.size() <= 32))
         && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
         && data.status in ['pending', 'partially_fulfilled', 'fulfilled']
+        && data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 64;
+    }
+
+    function isValidSavingsGoal(data, goalId, userId) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'category', 'targetAmount', 'currency', 'savedAmount', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'userId', 'title', 'category', 'targetAmount', 'currency',
+          'savedAmount', 'targetDate', 'notes', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.id is string && data.id == goalId
+        && data.userId is string && data.userId == userId && data.userId == request.auth.uid
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 160
+        && data.category is string && data.category.size() >= 1 && data.category.size() <= 120
+        && data.targetAmount is number && data.targetAmount > 0 && data.targetAmount <= 1000000000000
+        && isValidCurrency(data.currency)
+        && data.savedAmount is number && data.savedAmount >= 0 && data.savedAmount <= 1000000000000
+        && (!('targetDate' in data) || (data.targetDate is string && data.targetDate.size() <= 32))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
+        && data.status in ['active', 'partially_saved', 'completed']
         && data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 64
         && data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 64;
     }
@@ -182,6 +203,22 @@ service cloud.firestore {
           && request.resource.data.userId == resource.data.userId
           && request.resource.data.createdAt == resource.data.createdAt;
         allow delete: if isOwner(userId) && isValidId(pledgeId);
+      }
+
+      // User savings goals & deposit progress
+      match /savings_goals/{goalId} {
+        allow get: if isOwner(userId) && isValidId(goalId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(goalId)
+          && isValidSavingsGoal(request.resource.data, goalId, userId);
+        allow update: if isOwner(userId)
+          && isValidId(goalId)
+          && isValidSavingsGoal(request.resource.data, goalId, userId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isOwner(userId) && isValidId(goalId);
       }
     }
   }

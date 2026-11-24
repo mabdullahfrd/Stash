@@ -178,6 +178,10 @@
           "type": "string",
           "maxLength": 128
         },
+        "savingsGoalId": {
+          "type": "string",
+          "maxLength": 128
+        },
         "createdAt": {
           "type": "string",
           "maxLength": 64
@@ -245,6 +249,63 @@
         }
       },
       "required": ["id", "userId", "title", "cause", "pledgedAmount", "fulfilledAmount", "currency", "status", "createdAt", "updatedAt"]
+    },
+    "SavingsGoal": {
+      "title": "SavingsGoal",
+      "description": "User savings goal target and cumulative deposit progress",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Savings goal ID",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "targetAmount": {
+          "type": "number"
+        },
+        "savedAmount": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["KRW", "USD", "EUR", "PKR"]
+        },
+        "targetDate": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "partially_saved", "completed"]
+        },
+        "createdAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId", "title", "category", "targetAmount", "savedAmount", "currency", "status", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -263,6 +324,10 @@
     "/users/{userId}/charity_pledges/{pledgeId}": {
       "schema": "CharityPledge",
       "description": "Charity, Zakat, and Sadaqah pledges belonging to the user"
+    },
+    "/users/{userId}/savings_goals/{goalId}": {
+      "schema": "SavingsGoal",
+      "description": "Savings goals and contribution progress belonging to the user"
     }
   }
 }

@@ -18,14 +18,23 @@ export const ALLOWED_BANK_HINTS = new Set(['auto', 'toss', 'hana', 'other']);
 export const ALLOWED_EXPENSE_CATEGORIES = new Set([
   'Groceries (Eggs, Bread, Milk)',
   'Coffee & Drinks',
-  'Ice Cream & Treats',
+  'Ice Cream',
+  'Treats & Snacks',
   'Dining & Takeout',
   'Study & Uni Gear',
   'Transit & Metro',
+  'Travel & Flights',
   'Bills & Rent',
   'Subscriptions',
   'Health',
+  'Fitness & Sports',
+  'Beauty & Personal Care',
+  'Entertainment & Events',
   'Shopping',
+  'Tech & Software',
+  'Household & Laundry',
+  'Gifts & Occasions',
+  'Savings & Goals',
   'Charity & Giving',
   'Uncategorized',
 ]);
@@ -34,10 +43,36 @@ export const ALLOWED_INCOME_CATEGORIES = new Set([
   'Work Placement & Salary',
   'Tutoring & Campus Job',
   'Allowance & Inflow',
+  'Freelance & Side Gig',
+  'Scholarship & Grants',
+  'Interest & Dividends',
+  'Refunds & Cashback',
   'Uncategorized',
 ]);
 
-export function isValidIsoDateString(value: unknown): value is string {
+const ICE_CREAM_ITEM_REGEX = /(ice\s*cream|gelato|bingsu|baskin|haagen|sorbet|popsicle|sundae|melona|배스킨|아이스크림|메로나|빙수)/i;
+
+/**
+ * @param {string} rawCategory
+ * @param {string} itemOrMerchant
+ * @param {'expense' | 'income'} type
+ * @returns {string}
+ */
+function resolveValidatedCategory(rawCategory, itemOrMerchant, type) {
+  if (type === 'income') {
+    return ALLOWED_INCOME_CATEGORIES.has(rawCategory) ? rawCategory : 'Uncategorized';
+  }
+  if (rawCategory === 'Ice Cream & Treats') {
+    return ICE_CREAM_ITEM_REGEX.test(itemOrMerchant) ? 'Ice Cream' : 'Treats & Snacks';
+  }
+  return ALLOWED_EXPENSE_CATEGORIES.has(rawCategory) ? rawCategory : 'Uncategorized';
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+export function isValidIsoDateString(value) {
   if (typeof value !== 'string') return false;
   const trimmed = value.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return false;
@@ -50,7 +85,11 @@ export function isValidIsoDateString(value: unknown): value is string {
   );
 }
 
-export function parseDataUrlImage(input: string): { mimeType: string; data: string } | null {
+/**
+ * @param {string} input
+ * @returns {{ mimeType: string; data: string } | null}
+ */
+export function parseDataUrlImage(input) {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
@@ -67,34 +106,11 @@ export function parseDataUrlImage(input: string): { mimeType: string; data: stri
   return null;
 }
 
-export type ValidationResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; status: number; error: string };
-
-export interface ValidatedReceiptRequest {
-  mimeType: string;
-  cleanBase64: string;
-  merchantHint: string;
-  targetCurrency: string;
-  today: string;
-}
-
-export interface ValidatedBankScreenshotRequest {
-  mimeType: string;
-  cleanBase64: string;
-  bankHint: string;
-  targetCurrency: string;
-  today: string;
-}
-
-function validateCommonImageRequest(
-  body: Record<string, unknown>
-): ValidationResult<{
-  mimeType: string;
-  cleanBase64: string;
-  targetCurrency: string;
-  today: string;
-}> {
+/**
+ * @param {Record<string, unknown>} body
+ * @returns {{ ok: true; value: { mimeType: string; cleanBase64: string; targetCurrency: string; today: string } } | { ok: false; status: number; error: string }}
+ */
+function validateCommonImageRequest(body) {
   const rawPayloadSize = Buffer.byteLength(JSON.stringify(body), 'utf8');
   if (rawPayloadSize > MAX_GEMINI_BODY_BYTES) {
     return { ok: false, status: 413, error: 'Image payload exceeds the 6 MB upload limit.' };
@@ -144,9 +160,11 @@ function validateCommonImageRequest(
   };
 }
 
-export function validateScanReceiptRequest(
-  body: Record<string, unknown>
-): ValidationResult<ValidatedReceiptRequest> {
+/**
+ * @param {Record<string, unknown>} body
+ * @returns {{ ok: true; value: { mimeType: string; cleanBase64: string; targetCurrency: string; today: string; merchantHint: string } } | { ok: false; status: number; error: string }}
+ */
+export function validateScanReceiptRequest(body) {
   const common = validateCommonImageRequest(body);
   if (!common.ok) return common;
 
@@ -162,9 +180,11 @@ export function validateScanReceiptRequest(
   };
 }
 
-export function validateBankScreenshotRequest(
-  body: Record<string, unknown>
-): ValidationResult<ValidatedBankScreenshotRequest> {
+/**
+ * @param {Record<string, unknown>} body
+ * @returns {{ ok: true; value: { mimeType: string; cleanBase64: string; targetCurrency: string; today: string; bankHint: string } } | { ok: false; status: number; error: string }}
+ */
+export function validateBankScreenshotRequest(body) {
   const common = validateCommonImageRequest(body);
   if (!common.ok) return common;
 
@@ -187,40 +207,33 @@ export function validateBankScreenshotRequest(
   };
 }
 
-export interface NormalizedReceiptItem {
-  name: string;
-  price: number;
-  category: string;
-}
-
-export interface NormalizedReceiptOutput {
-  merchant: string;
-  totalAmount: number;
-  currency: string;
-  date: string;
-  items: NormalizedReceiptItem[];
-}
-
+/**
+ * @param {unknown} parsed
+ * @param {string} fallbackDate
+ * @param {string} fallbackCurrency
+ * @param {string} [merchantHint]
+ */
 export function normalizeReceiptOutput(
-  parsed: unknown,
-  fallbackDate: string,
-  fallbackCurrency: string,
+  parsed,
+  fallbackDate,
+  fallbackCurrency,
   merchantHint = ''
-): NormalizedReceiptOutput | null {
+) {
   if (!parsed || typeof parsed !== 'object') return null;
-  const obj = parsed as Record<string, unknown>;
+  const obj = /** @type {Record<string, unknown>} */ (parsed);
   if (!Array.isArray(obj.items)) return null;
 
-  const items: NormalizedReceiptItem[] = [];
+  /** @type {Array<{ name: string; price: number; category: string }>} */
+  const items = [];
   for (const rawItem of obj.items) {
     if (!rawItem || typeof rawItem !== 'object') continue;
-    const row = rawItem as Record<string, unknown>;
+    const row = /** @type {Record<string, unknown>} */ (rawItem);
     const name = typeof row.name === 'string' ? row.name.trim().slice(0, 120) : '';
     const price = Number(row.price);
     if (!name || !Number.isFinite(price) || price < 0) continue;
 
     const rawCat = typeof row.category === 'string' ? row.category.trim() : '';
-    const category = ALLOWED_EXPENSE_CATEGORIES.has(rawCat) ? rawCat : 'Uncategorized';
+    const category = resolveValidatedCategory(rawCat, name, 'expense');
 
     items.push({ name, price, category });
   }
@@ -249,46 +262,31 @@ export function normalizeReceiptOutput(
   };
 }
 
-export interface NormalizedBankEntry {
-  merchant: string;
-  amount: number;
-  type: 'expense' | 'income';
-  date: string;
-  category: string;
-  notes?: string;
-}
-
-export interface NormalizedBankScreenshotOutput {
-  bankName: string;
-  bankHint: 'toss' | 'hana' | 'other';
-  currency: string;
-  entries: NormalizedBankEntry[];
-}
-
-export function normalizeBankScreenshotOutput(
-  parsed: unknown,
-  fallbackDate: string,
-  fallbackCurrency: string
-): NormalizedBankScreenshotOutput | null {
+/**
+ * @param {unknown} parsed
+ * @param {string} fallbackDate
+ * @param {string} fallbackCurrency
+ */
+export function normalizeBankScreenshotOutput(parsed, fallbackDate, fallbackCurrency) {
   if (!parsed || typeof parsed !== 'object') return null;
-  const obj = parsed as Record<string, unknown>;
+  const obj = /** @type {Record<string, unknown>} */ (parsed);
   if (!Array.isArray(obj.entries)) return null;
 
-  const entries: NormalizedBankEntry[] = [];
+  /** @type {Array<{ merchant: string; amount: number; type: 'expense' | 'income'; date: string; category: string; notes?: string }>} */
+  const entries = [];
   for (const rawEntry of obj.entries) {
     if (!rawEntry || typeof rawEntry !== 'object') continue;
-    const row = rawEntry as Record<string, unknown>;
+    const row = /** @type {Record<string, unknown>} */ (rawEntry);
     const merchant = typeof row.merchant === 'string' ? row.merchant.trim().slice(0, 120) : '';
     const amount = Number(row.amount);
     if (!merchant || !Number.isFinite(amount) || amount < 0) continue;
 
     const rawType = typeof row.type === 'string' ? row.type.trim().toLowerCase() : 'expense';
-    const type: 'expense' | 'income' = rawType === 'income' ? 'income' : 'expense';
+    /** @type {'expense' | 'income'} */
+    const type = rawType === 'income' ? 'income' : 'expense';
 
     const rawCat = typeof row.category === 'string' ? row.category.trim() : '';
-    const allowedSet =
-      type === 'income' ? ALLOWED_INCOME_CATEGORIES : ALLOWED_EXPENSE_CATEGORIES;
-    const category = allowedSet.has(rawCat) ? rawCat : 'Uncategorized';
+    const category = resolveValidatedCategory(rawCat, merchant, type);
 
     const date = isValidIsoDateString(row.date) ? row.date.trim() : fallbackDate;
     const notes = typeof row.notes === 'string' ? row.notes.trim().slice(0, 200) : undefined;
@@ -306,8 +304,8 @@ export function normalizeBankScreenshotOutput(
   if (entries.length === 0) return null;
 
   const rawHint = typeof obj.bankHint === 'string' ? obj.bankHint.trim().toLowerCase() : '';
-  const bankHint: 'toss' | 'hana' | 'other' =
-    rawHint === 'toss' || rawHint === 'hana' ? rawHint : 'other';
+  /** @type {'toss' | 'hana' | 'other'} */
+  const bankHint = rawHint === 'toss' || rawHint === 'hana' ? rawHint : 'other';
 
   const rawBankName =
     typeof obj.bankName === 'string' ? obj.bankName.trim().slice(0, 80) : '';
@@ -328,19 +326,23 @@ export function normalizeBankScreenshotOutput(
 }
 
 export class SlidingWindowRateLimiter {
-  private readonly hits = new Map<string, number[]>();
-  private readonly maxRequests: number;
-  private readonly windowMs: number;
+  /** @type {Map<string, number[]>} */
+  hits = new Map();
+  /** @type {number} */
+  maxRequests;
+  /** @type {number} */
+  windowMs;
 
-  constructor(maxRequests: number = 20, windowMs: number = 60 * 60 * 1000) {
+  constructor(maxRequests = 20, windowMs = 60 * 60 * 1000) {
     this.maxRequests = maxRequests;
     this.windowMs = windowMs;
   }
 
-  check(
-    key: string,
-    nowMs: number = Date.now()
-  ): { allowed: boolean; remaining: number; retryAfterSeconds: number } {
+  /**
+   * @param {string} key
+   * @param {number} [nowMs]
+   */
+  check(key, nowMs = Date.now()) {
     const cutoff = nowMs - this.windowMs;
     const existing = (this.hits.get(key) || []).filter((ts) => ts > cutoff);
 
@@ -361,13 +363,11 @@ export class SlidingWindowRateLimiter {
   }
 }
 
-export function parseModelJsonResponse(rawText: string | undefined): {
-  ok: true;
-  data: unknown;
-} | {
-  ok: false;
-  error: unknown;
-} {
+/**
+ * @param {string | undefined} rawText
+ * @returns {{ ok: true; data: unknown } | { ok: false; error: unknown }}
+ */
+export function parseModelJsonResponse(rawText) {
   let cleaned = (rawText || '{}').trim();
   const fenceMatch = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(cleaned);
   if (fenceMatch) {
@@ -380,11 +380,13 @@ export function parseModelJsonResponse(rawText: string | undefined): {
   }
 }
 
-export function classifyGeminiApiError(
-  err: unknown,
-  featureLabel: 'Receipt' | 'Screenshot'
-): { status: number; message: string } {
-  const anyErr = err as { status?: number; code?: string | number; message?: string } | null;
+/**
+ * @param {unknown} err
+ * @param {'Receipt' | 'Screenshot'} featureLabel
+ * @returns {{ status: number; message: string }}
+ */
+export function classifyGeminiApiError(err, featureLabel) {
+  const anyErr = /** @type {{ status?: number; code?: string | number; message?: string } | null} */ (err);
   const status = typeof anyErr?.status === 'number' ? anyErr.status : undefined;
   const msg = typeof anyErr?.message === 'string' ? anyErr.message.toUpperCase() : '';
 

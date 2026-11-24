@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Account, Category, CharityPledge, Transaction } from '../types/finance';
+import { Account, Category, CharityPledge, SavingsGoal, Transaction } from '../types/finance';
 
 export const INITIAL_ACCOUNTS: Account[] = [
   {
@@ -37,20 +37,62 @@ export const INITIAL_CATEGORIES: Category[] = [
   { id: 'cat-placement', name: 'Work Placement & Salary', type: 'income', icon: 'Briefcase', color: '#34C759' },
   { id: 'cat-tutoring', name: 'Tutoring & Campus Job', type: 'income', icon: 'GraduationCap', color: '#007AFF' },
   { id: 'cat-allowance', name: 'Allowance & Inflow', type: 'income', icon: 'Heart', color: '#FF2D55' },
+  { id: 'cat-freelance', name: 'Freelance & Side Gig', type: 'income', icon: 'Laptop', color: '#5856D6' },
+  { id: 'cat-scholarship', name: 'Scholarship & Grants', type: 'income', icon: 'Award', color: '#0EA5E9' },
+  { id: 'cat-investments', name: 'Interest & Dividends', type: 'income', icon: 'TrendingUp', color: '#10B981' },
+  { id: 'cat-refunds', name: 'Refunds & Cashback', type: 'income', icon: 'RotateCcw', color: '#F59E0B' },
 
   // Expenses
   { id: 'cat-groceries', name: 'Groceries (Eggs, Bread, Milk)', type: 'expense', icon: 'ShoppingCart', color: '#34C759' },
   { id: 'cat-coffee', name: 'Coffee & Drinks', type: 'expense', icon: 'Coffee', color: '#FF9500' },
-  { id: 'cat-icecream', name: 'Ice Cream & Treats', type: 'expense', icon: 'IceCream', color: '#FF2D55' },
+  { id: 'cat-icecream', name: 'Ice Cream', type: 'expense', icon: 'IceCream', color: '#FF2D55' },
+  { id: 'cat-treats', name: 'Treats & Snacks', type: 'expense', icon: 'Cookie', color: '#F97316' },
   { id: 'cat-dining', name: 'Dining & Takeout', type: 'expense', icon: 'Utensils', color: '#AF52DE' },
   { id: 'cat-study', name: 'Study & Uni Gear', type: 'expense', icon: 'BookOpen', color: '#5856D6' },
   { id: 'cat-transit', name: 'Transit & Metro', type: 'expense', icon: 'Bus', color: '#007AFF' },
+  { id: 'cat-travel', name: 'Travel & Flights', type: 'expense', icon: 'Plane', color: '#0284C7' },
   { id: 'cat-bills', name: 'Bills & Rent', type: 'expense', icon: 'Receipt', color: '#64748B' },
   { id: 'cat-subscriptions', name: 'Subscriptions', type: 'expense', icon: 'Repeat', color: '#0EA5E9' },
   { id: 'cat-health', name: 'Health', type: 'expense', icon: 'Stethoscope', color: '#10B981' },
+  { id: 'cat-fitness', name: 'Fitness & Sports', type: 'expense', icon: 'Dumbbell', color: '#16A34A' },
+  { id: 'cat-beauty', name: 'Beauty & Personal Care', type: 'expense', icon: 'Sparkles', color: '#F43F5E' },
+  { id: 'cat-entertainment', name: 'Entertainment & Events', type: 'expense', icon: 'Film', color: '#8B5CF6' },
   { id: 'cat-shopping', name: 'Shopping', type: 'expense', icon: 'ShoppingBag', color: '#EC4899' },
+  { id: 'cat-tech', name: 'Tech & Software', type: 'expense', icon: 'Smartphone', color: '#3B82F6' },
+  { id: 'cat-household', name: 'Household & Laundry', type: 'expense', icon: 'Home', color: '#14B8A6' },
+  { id: 'cat-gifts', name: 'Gifts & Occasions', type: 'expense', icon: 'Gift', color: '#E11D48' },
+  { id: 'cat-savings', name: 'Savings & Goals', type: 'expense', icon: 'PiggyBank', color: '#84CC16' },
   { id: 'cat-charity', name: 'Charity & Giving', type: 'expense', icon: 'HeartHandshake', color: '#34C759', isCharity: true },
   { id: 'cat-uncategorized', name: 'Uncategorized', type: 'expense', icon: 'Tag', color: '#8E8E93' },
+];
+
+export const INITIAL_SAVINGS_GOALS: SavingsGoal[] = [
+  {
+    id: 'goal-emergency-krw',
+    title: 'Emergency Buffer',
+    category: 'Emergency Fund',
+    targetAmount: 1000000,
+    currency: 'KRW',
+    savedAmount: 350000,
+    targetDate: '2026-12-31',
+    notes: '3-month essential living reserve in KRW.',
+    status: 'partially_saved',
+    createdAt: '2026-10-20',
+    updatedAt: '2026-11-02',
+  },
+  {
+    id: 'goal-tech-fund',
+    title: 'Laptop & Study Setup',
+    category: 'Tech & Study',
+    targetAmount: 1500000,
+    currency: 'KRW',
+    savedAmount: 500000,
+    targetDate: '2027-02-15',
+    notes: 'Upgrade reserve for next semester projects.',
+    status: 'partially_saved',
+    createdAt: '2026-10-28',
+    updatedAt: '2026-11-04',
+  },
 ];
 
 export const INITIAL_CHARITY_PLEDGES: CharityPledge[] = [
@@ -99,7 +141,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
       { id: 'item-1', name: 'Grade-A Eggs 10pk (신선 특란)', price: 4500, category: 'Groceries (Eggs, Bread, Milk)' },
       { id: 'item-2', name: 'Milk Toast Sourdough (우유 식빵)', price: 3800, category: 'Groceries (Eggs, Bread, Milk)' },
       { id: 'item-3', name: 'Cold Brew Oat Latte (콜드브루 라떼)', price: 5500, category: 'Coffee & Drinks' },
-      { id: 'item-4', name: 'Haagen-Dazs Vanilla Cup (하겐다즈)', price: 4200, category: 'Ice Cream & Treats' },
+      { id: 'item-4', name: 'Haagen-Dazs Vanilla Cup (하겐다즈)', price: 4200, category: 'Ice Cream' },
     ],
     createdAt: '2026-11-02T14:15:00Z',
     updatedAt: '2026-11-02T14:15:00Z',
@@ -118,7 +160,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     createdAt: '2026-11-03T10:30:00Z',
     updatedAt: '2026-11-03T10:30:00Z',
   },
-  // Ice cream treat via Toss Bank
+  // Ice cream via Toss Bank
   {
     id: 'tx-s3',
     type: 'expense',
@@ -128,7 +170,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     categoryId: 'cat-icecream',
     accountId: 'acc-krw-toss',
     merchant: 'Baskin Robbins (배스킨라빈스)',
-    notes: 'Single regular scoop treat',
+    notes: 'Single regular scoop',
     createdAt: '2026-11-03T19:45:00Z',
     updatedAt: '2026-11-03T19:45:00Z',
   },
@@ -167,5 +209,6 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
 // Backwards compatibility alias
 export const STUDENT_ACCOUNTS = INITIAL_ACCOUNTS;
 export const STUDENT_CATEGORIES = INITIAL_CATEGORIES;
+export const STUDENT_SAVINGS_GOALS = INITIAL_SAVINGS_GOALS;
 export const STUDENT_CHARITY_PLEDGES = INITIAL_CHARITY_PLEDGES;
 export const STUDENT_TRANSACTIONS = INITIAL_TRANSACTIONS;

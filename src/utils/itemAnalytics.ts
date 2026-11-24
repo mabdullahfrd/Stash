@@ -78,14 +78,32 @@ function resolveCategoryForReceiptItem(
   fallbackCategoryId: string,
   categories: Category[]
 ): Category | undefined {
-  const byLabel = categories.find(
-    (c) =>
-      c.type === 'expense' &&
-      (c.name.toLowerCase() === itemCategoryLabel.toLowerCase() ||
-        c.name.toLowerCase().includes(itemCategoryLabel.toLowerCase()) ||
-        itemCategoryLabel.toLowerCase().includes(c.name.toLowerCase()))
-  );
-  if (byLabel) return byLabel;
+  const normalizedLabel = itemCategoryLabel.trim().toLowerCase();
+
+  // Exact or close match first (excluding legacy merged label so it splits accurately)
+  if (normalizedLabel && normalizedLabel !== 'ice cream & treats') {
+    const byLabel = categories.find(
+      (c) =>
+        c.type === 'expense' &&
+        (c.name.toLowerCase() === normalizedLabel ||
+          c.name.toLowerCase().includes(normalizedLabel) ||
+          normalizedLabel.includes(c.name.toLowerCase()))
+    );
+    if (byLabel) return byLabel;
+  }
+
+  // Infer from itemName first so legacy 'Ice Cream & Treats' items split cleanly
+  const inferredByName = inferCategoryForItem(itemName, categories, 'expense');
+  if (inferredByName) {
+    return categories.find((c) => c.id === inferredByName.categoryId);
+  }
+
+  if (normalizedLabel === 'ice cream & treats') {
+    return (
+      categories.find((c) => c.id === 'cat-icecream') ||
+      categories.find((c) => c.id === 'cat-treats')
+    );
+  }
 
   const inferred = inferCategoryForItem(`${itemName} ${itemCategoryLabel}`, categories, 'expense');
   if (inferred) {

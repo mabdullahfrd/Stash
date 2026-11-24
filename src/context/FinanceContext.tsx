@@ -16,9 +16,10 @@ import {
   FinanceDataContextType,
   ImportBackupResult,
   PledgeFulfillResult,
+  SavingsContributeResult,
 } from './FinanceDataContext';
 
-export type { ImportBackupResult, PledgeFulfillResult };
+export type { ImportBackupResult, PledgeFulfillResult, SavingsContributeResult };
 export { useFinanceUI, useGamification, useFinanceData };
 
 export type FinanceContextType = FinanceDataContextType &

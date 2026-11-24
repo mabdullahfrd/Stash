@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import { Account, Category, CharityPledge, CurrencyCode, Transaction } from '../types/finance';
+import { Account, Category, CharityPledge, CurrencyCode, SavingsGoal, Transaction } from '../types/finance';
 
 const CurrencyCodeSchema = z.enum(['USD', 'EUR', 'KRW', 'PKR']);
 
@@ -45,6 +45,7 @@ const TransactionSchema = z.object({
   receiptItems: z.array(ReceiptItemSchema).optional(),
   isCharity: z.boolean().optional(),
   charityPledgeId: z.string().max(128).optional(),
+  savingsGoalId: z.string().max(128).optional(),
   createdAt: z.string().min(1).max(64),
   updatedAt: z.string().min(1).max(64),
 });
@@ -72,11 +73,26 @@ const CharityPledgeSchema = z.object({
   updatedAt: z.string().min(1).max(64),
 });
 
+const SavingsGoalSchema = z.object({
+  id: z.string().min(1).max(128),
+  title: z.string().min(1).max(160),
+  category: z.string().min(1).max(120),
+  targetAmount: z.number().finite().positive(),
+  currency: CurrencyCodeSchema,
+  savedAmount: z.number().finite().nonnegative(),
+  targetDate: z.string().max(32).optional(),
+  notes: z.string().max(1000).optional(),
+  status: z.enum(['active', 'partially_saved', 'completed']),
+  createdAt: z.string().min(1).max(64),
+  updatedAt: z.string().min(1).max(64),
+});
+
 export const BackupPayloadSchema = z.object({
   accounts: z.array(AccountSchema),
   transactions: z.array(TransactionSchema),
   categories: z.array(CategorySchema).optional(),
   charityPledges: z.array(CharityPledgeSchema),
+  savingsGoals: z.array(SavingsGoalSchema).default([]),
   primaryCurrency: CurrencyCodeSchema.optional(),
 });
 
@@ -85,6 +101,7 @@ export interface ValidatedBackupData {
   transactions: Transaction[];
   categories?: Category[];
   charityPledges: CharityPledge[];
+  savingsGoals?: SavingsGoal[];
   primaryCurrency?: CurrencyCode;
 }
 

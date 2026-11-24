@@ -30,7 +30,10 @@ test('Auto-categorizes common grocery, coffee, treat, dining, study, and transit
 
 test('Respects word boundaries and specificity rules for Chocolate bar, Apple Music, Campus Cafeteria Lunch, Smart Store, Price tag', () => {
   const choco = categorizeItemOrUncategorized('Chocolate bar', INITIAL_CATEGORIES, 'expense');
-  assert.equal(choco.name, 'Ice Cream & Treats');
+  assert.equal(choco.name, 'Treats & Snacks');
+
+  const macaron = categorizeItemOrUncategorized('Strawberry Macaron', INITIAL_CATEGORIES, 'expense');
+  assert.equal(macaron.name, 'Treats & Snacks');
 
   const appleMusic = categorizeItemOrUncategorized('Apple Music', INITIAL_CATEGORIES, 'expense');
   assert.equal(appleMusic.name, 'Subscriptions');
@@ -43,6 +46,23 @@ test('Respects word boundaries and specificity rules for Chocolate bar, Apple Mu
 
   const priceTag = categorizeItemOrUncategorized('Price tag', INITIAL_CATEGORIES, 'expense');
   assert.equal(priceTag.name, 'Uncategorized');
+});
+
+test('Auto-categorizes expanded expense and income categories accurately', () => {
+  assert.equal(inferCategoryForItem('Netflix Standard Plan', INITIAL_CATEGORIES, 'expense')?.categoryId, 'cat-subscriptions');
+  assert.equal(inferCategoryForItem('Anytime Fitness Gym Membership', INITIAL_CATEGORIES, 'expense')?.categoryId, 'cat-fitness');
+  assert.equal(inferCategoryForItem('Olive Young Skincare Serum', INITIAL_CATEGORIES, 'expense')?.categoryId, 'cat-beauty');
+  assert.equal(inferCategoryForItem('CGV Cinema Movie Ticket', INITIAL_CATEGORIES, 'expense')?.categoryId, 'cat-entertainment');
+  assert.equal(inferCategoryForItem('Korean Air Flight Ticket', INITIAL_CATEGORIES, 'expense')?.categoryId, 'cat-travel');
+  assert.equal(inferCategoryForItem('Laundry Detergent & Tissues', INITIAL_CATEGORIES, 'expense')?.categoryId, 'cat-household');
+  assert.equal(inferCategoryForItem('MacBook USB-C Charger', INITIAL_CATEGORIES, 'expense')?.categoryId, 'cat-tech');
+  assert.equal(inferCategoryForItem('Friend Birthday Gift', INITIAL_CATEGORIES, 'expense')?.categoryId, 'cat-gifts');
+  assert.equal(inferCategoryForItem('Emergency Fund Deposit', INITIAL_CATEGORIES, 'expense')?.categoryId, 'cat-savings');
+
+  assert.equal(inferCategoryForItem('Upwork Freelance UI Design', INITIAL_CATEGORIES, 'income')?.categoryId, 'cat-freelance');
+  assert.equal(inferCategoryForItem('University Merit Scholarship', INITIAL_CATEGORIES, 'income')?.categoryId, 'cat-scholarship');
+  assert.equal(inferCategoryForItem('Toss Savings Interest Dividend', INITIAL_CATEGORIES, 'income')?.categoryId, 'cat-investments');
+  assert.equal(inferCategoryForItem('Coupang Order Refund', INITIAL_CATEGORIES, 'income')?.categoryId, 'cat-refunds');
 });
 
 test('Auto-categorizes charity keywords and income keywords accurately', () => {

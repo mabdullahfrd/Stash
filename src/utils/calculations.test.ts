@@ -11,9 +11,11 @@ import {
   computeCashFlow,
   computeCharityStats,
   computePledgeFulfillment,
+  computeSavingsStats,
+  computeSavingsContribution,
 } from './calculations';
 import { convertCurrency, DEFAULT_EXCHANGE_RATES } from './currencies';
-import { Account, CharityPledge, Transaction } from '../types/finance';
+import { Account, CharityPledge, SavingsGoal, Transaction } from '../types/finance';
 
 test('Currency conversion calculations across USD, EUR, KRW, and PKR', () => {
   // USD to EUR
@@ -378,6 +380,72 @@ test('computePledgeFulfillment validates amounts and converts across currencies'
   if (exact.ok) {
     assert.equal(exact.newFulfilledAmount, 100000);
     assert.equal(exact.newStatus, 'fulfilled');
+  }
+});
+
+test('Savings goal aggregate stats and cross-currency contributions compute accurately', () => {
+  const goals: SavingsGoal[] = [
+    {
+      id: 'goal-1',
+      title: 'Emergency Buffer',
+      category: 'Emergency Fund',
+      targetAmount: 1000,
+      savedAmount: 250,
+      currency: 'USD',
+      status: 'partially_saved',
+      createdAt: '2026-11-01',
+      updatedAt: '2026-11-01',
+    },
+    {
+      id: 'goal-2',
+      title: 'Laptop Reserve',
+      category: 'Tech',
+      targetAmount: 500,
+      savedAmount: 500,
+      currency: 'USD',
+      status: 'completed',
+      createdAt: '2026-11-01',
+      updatedAt: '2026-11-02',
+    },
+  ];
+
+  const stats = computeSavingsStats(goals, 'USD', DEFAULT_EXCHANGE_RATES);
+  assert.equal(stats.totalTarget, 1500);
+  assert.equal(stats.totalSaved, 750);
+  assert.equal(stats.totalRemaining, 750);
+  assert.equal(stats.progressPercent, 50);
+  assert.equal(stats.activeGoalsCount, 1);
+
+  const krwGoal: SavingsGoal = {
+    id: 'goal-krw',
+    title: 'Busan Trip',
+    category: 'Travel',
+    targetAmount: 200000,
+    savedAmount: 100000,
+    currency: 'KRW',
+    status: 'partially_saved',
+    createdAt: '2026-11-01',
+    updatedAt: '2026-11-01',
+  };
+
+  assert.equal(computeSavingsContribution(krwGoal, 0, 'KRW', DEFAULT_EXCHANGE_RATES).ok, false);
+  assert.equal(computeSavingsContribution(krwGoal, -5000, 'KRW', DEFAULT_EXCHANGE_RATES).ok, false);
+
+  // 50 USD = 69,000 KRW -> total saved 169,000 KRW -> partially_saved
+  const partial = computeSavingsContribution(krwGoal, 50, 'USD', DEFAULT_EXCHANGE_RATES);
+  assert.equal(partial.ok, true);
+  if (partial.ok) {
+    assert.equal(partial.convertedInGoalCurrency, 69000);
+    assert.equal(partial.newSavedAmount, 169000);
+    assert.equal(partial.newStatus, 'partially_saved');
+  }
+
+  // Deposit remaining 100,000 KRW -> completed
+  const done = computeSavingsContribution(krwGoal, 100000, 'KRW', DEFAULT_EXCHANGE_RATES);
+  assert.equal(done.ok, true);
+  if (done.ok) {
+    assert.equal(done.newSavedAmount, 200000);
+    assert.equal(done.newStatus, 'completed');
   }
 });
 

@@ -62,6 +62,7 @@ export interface Transaction {
   receiptItems?: ReceiptItem[];
   isCharity?: boolean;
   charityPledgeId?: string;
+  savingsGoalId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -78,6 +79,22 @@ export interface CharityPledge {
   dueDate?: string;
   notes?: string;
   status: PledgeStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SavingsGoalStatus = 'active' | 'partially_saved' | 'completed';
+
+export interface SavingsGoal {
+  id: string;
+  title: string;
+  category: string;
+  targetAmount: number;
+  currency: CurrencyCode;
+  savedAmount: number;
+  targetDate?: string;
+  notes?: string;
+  status: SavingsGoalStatus;
   createdAt: string;
   updatedAt: string;
 }

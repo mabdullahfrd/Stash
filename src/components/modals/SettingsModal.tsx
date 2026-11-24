@@ -460,8 +460,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         title="Clear all accounts and transactions?"
         description={
           user
-            ? 'This permanently removes all linked bank accounts, transactions, and charity pledges from your cloud ledger and resets your balance to ₩0.'
-            : 'This removes all demo bank accounts, transactions, and charity pledges from this device and resets your balance to ₩0.'
+            ? 'This permanently removes all linked bank accounts, transactions, savings goals, and charity pledges from your cloud ledger and resets your balance to ₩0.'
+            : 'This removes all demo bank accounts, transactions, savings goals, and charity pledges from this device and resets your balance to ₩0.'
         }
         confirmLabel="Clear everything"
         onConfirm={async () => {
@@ -475,7 +475,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       <ConfirmDialog
         isOpen={isDeleteAccountConfirmOpen}
         title="Delete your account permanently?"
-        description="This permanently deletes all your Firestore accounts, transactions, charity pledges, user profile, and Firebase authentication account. This cannot be undone."
+        description="This permanently deletes all your Firestore accounts, transactions, savings goals, charity pledges, user profile, and Firebase authentication account. This cannot be undone."
         confirmLabel={isDeletingAccount ? 'Deleting...' : 'Delete permanently'}
         confirmDisabled={isDeletingAccount || (hasPasswordProvider && deletePassword.length < 1)}
         onConfirm={handleConfirmDeleteAccount}
@@ -521,7 +521,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         title="Restore backup from JSON?"
         description={
           pendingRestore
-            ? `This backup contains ${pendingRestore.summary.accounts.length} accounts, ${pendingRestore.summary.transactions.length} transactions, and ${pendingRestore.summary.charityPledges.length} charity pledges. Restoring will replace your current view and sync to your ledger.`
+            ? `This backup contains ${pendingRestore.summary.accounts.length} accounts, ${pendingRestore.summary.transactions.length} transactions, ${pendingRestore.summary.savingsGoals?.length ?? 0} savings goals, and ${pendingRestore.summary.charityPledges.length} charity pledges. Restoring will replace your current view and sync to your ledger.`
             : ''
         }
         confirmLabel="Restore backup"
@@ -533,7 +533,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           if (result.ok && result.counts) {
             setRestoreFeedback({
               type: 'success',
-              text: `Restored ${result.counts.accounts} accounts, ${result.counts.transactions} transactions, and ${result.counts.pledges} pledges.`,
+              text: `Restored ${result.counts.accounts} accounts, ${result.counts.transactions} transactions, ${result.counts.savingsGoals} savings goals, and ${result.counts.pledges} pledges.`,
             });
           } else {
             setRestoreFeedback({

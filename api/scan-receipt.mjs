@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { type ApiRequest, type ApiResponse, handleScanReceipt } from '../server/geminiHandlers.ts';
+import { handleScanReceipt } from '../server/geminiHandlers.mjs';
 
-export default async function handler(req: ApiRequest, res: ApiResponse) {
+export default async function handler(req, res) {
   try {
     return await handleScanReceipt(req, res);
   } catch (err) {

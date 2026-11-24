@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Account, CharityPledge, CurrencyCode, ExchangeRates, Transaction } from '../types/finance';
+import { Account, CharityPledge, CurrencyCode, ExchangeRates, SavingsGoal, Transaction } from '../types/finance';
 import { convertCurrency, CURRENCY_REGISTRY, DEFAULT_EXCHANGE_RATES, roundCurrencyAmount } from './currencies';
 
 export interface CalculatedAccountBalance {
@@ -258,6 +258,96 @@ export function computePledgeFulfillment(
     ok: true,
     convertedInPledgeCurrency,
     newFulfilledAmount,
+    newStatus,
+  };
+}
+
+/**
+ * Computes aggregate savings goals progress in the user's active currency.
+ */
+export function computeSavingsStats(
+  goals: SavingsGoal[],
+  targetCurrency: CurrencyCode,
+  rates: ExchangeRates
+): {
+  totalTarget: number;
+  totalSaved: number;
+  totalRemaining: number;
+  progressPercent: number;
+  activeGoalsCount: number;
+} {
+  let totalTarget = 0;
+  let totalSaved = 0;
+
+  for (const goal of goals) {
+    const targetConverted = convertCurrency(goal.targetAmount, goal.currency, targetCurrency, rates);
+    const savedConverted = convertCurrency(goal.savedAmount, goal.currency, targetCurrency, rates);
+
+    totalTarget += targetConverted;
+    totalSaved += savedConverted;
+  }
+
+  const totalRemaining = Math.max(0, totalTarget - totalSaved);
+  const progressPercent = totalTarget > 0 ? Math.min(100, (totalSaved / totalTarget) * 100) : 0;
+  const activeGoalsCount = goals.filter(
+    (g) => g.status !== 'completed' && g.savedAmount < g.targetAmount
+  ).length;
+
+  return {
+    totalTarget,
+    totalSaved,
+    totalRemaining,
+    progressPercent: Number(progressPercent.toFixed(1)),
+    activeGoalsCount,
+  };
+}
+
+export type SavingsContributionResult =
+  | {
+      ok: true;
+      convertedInGoalCurrency: number;
+      newSavedAmount: number;
+      newStatus: SavingsGoal['status'];
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+/**
+ * Validates and computes a contribution toward a savings goal across currencies.
+ */
+export function computeSavingsContribution(
+  goal: SavingsGoal,
+  depositAmount: number,
+  depositCurrency: CurrencyCode,
+  rates: ExchangeRates = DEFAULT_EXCHANGE_RATES
+): SavingsContributionResult {
+  if (!Number.isFinite(depositAmount) || depositAmount <= 0) {
+    return { ok: false, error: 'Enter a savings amount greater than 0.' };
+  }
+
+  const convertedInGoalCurrency = convertCurrency(depositAmount, depositCurrency, goal.currency, rates);
+  if (!Number.isFinite(convertedInGoalCurrency) || convertedInGoalCurrency <= 0) {
+    return { ok: false, error: 'Savings amount is too small after currency conversion.' };
+  }
+
+  const newSavedAmount = roundCurrencyAmount(
+    goal.savedAmount + convertedInGoalCurrency,
+    goal.currency
+  );
+
+  if (newSavedAmount > 1_000_000_000_000) {
+    return { ok: false, error: 'Savings total exceeds the maximum supported limit.' };
+  }
+
+  const newStatus: SavingsGoal['status'] =
+    newSavedAmount >= goal.targetAmount ? 'completed' : 'partially_saved';
+
+  return {
+    ok: true,
+    convertedInGoalCurrency,
+    newSavedAmount,
     newStatus,
   };
 }

@@ -16,12 +16,14 @@ import {
   ImagePlus,
   AlertCircle,
   Check,
+  ScanLine,
 } from 'lucide-react';
 import { CurrencyCode, ReceiptItem } from '../../types/finance';
 import { CURRENCY_REGISTRY, formatCurrency, roundCurrencyAmount } from '../../utils/currencies';
 import { MinimalHeader } from '../common/MinimalHeader';
 import { BankLogo } from '../common/BankLogo';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { ReceiptCameraModal } from '../modals/ReceiptCameraModal';
 import { findBankPreset } from '../../utils/koreanBanks';
 import { getFallbackCategory, inferCategoryForItem } from '../../utils/autoCategorize';
 import { isValidDateString, localDateString } from '../../utils/dates';
@@ -43,7 +45,7 @@ const SAMPLE_RECEIPTS = [
       { id: '1', name: 'Fresh Grade-A Eggs (신선 계란 10구)', price: 4500, category: 'Groceries (Eggs, Bread, Milk)' },
       { id: '2', name: 'Milk Toast Bread (우유 식빵)', price: 3800, category: 'Groceries (Eggs, Bread, Milk)' },
       { id: '3', name: 'Iced Vanilla Latte (바닐라 라떼)', price: 5500, category: 'Coffee & Drinks' },
-      { id: '4', name: 'Baskin Cup (배스킨라빈스)', price: 4200, category: 'Ice Cream & Treats' },
+      { id: '4', name: 'Baskin Cup (배스킨라빈스)', price: 4200, category: 'Ice Cream' },
     ],
   },
   {
@@ -51,7 +53,7 @@ const SAMPLE_RECEIPTS = [
     merchant: 'Mega MGC Coffee (메가커피)',
     items: [
       { id: '1', name: 'Mega Iced Americano (메가 아메리카노)', price: 3000, category: 'Coffee & Drinks' },
-      { id: '2', name: 'Strawberry Macaron (딸기 마카롱)', price: 3500, category: 'Ice Cream & Treats' },
+      { id: '2', name: 'Strawberry Macaron (딸기 마카롱)', price: 3500, category: 'Treats & Snacks' },
     ],
   },
   {
@@ -60,7 +62,7 @@ const SAMPLE_RECEIPTS = [
     items: [
       { id: '1', name: 'Banana Milk (바나나맛 우유)', price: 1700, category: 'Groceries (Eggs, Bread, Milk)' },
       { id: '2', name: 'Study Highlighter Set (형광펜 세트)', price: 3200, category: 'Study & Uni Gear' },
-      { id: '3', name: 'Ice Cream Bar (메로나)', price: 1200, category: 'Ice Cream & Treats' },
+      { id: '3', name: 'Ice Cream Bar (메로나)', price: 1200, category: 'Ice Cream' },
     ],
   },
 ];
@@ -124,7 +126,8 @@ export const ScannerView: React.FC = () => {
     }
   });
   const hasGeminiConsentRef = useRef(hasGeminiConsent);
-  const [consentDialogMode, setConsentDialogMode] = useState<'bank' | 'receipt' | null>(null);
+  const [consentDialogMode, setConsentDialogMode] = useState<'bank' | 'receipt' | 'camera' | null>(null);
+  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
   const bankFileInputRef = useRef<HTMLInputElement | null>(null);
   const receiptFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -203,7 +206,11 @@ export const ScannerView: React.FC = () => {
       if (response.status === 504) {
         return { ok: false as const, data: parsed, error: 'The AI scan timed out on the server. Please try a clearer photo.' };
       }
-      return { ok: false as const, data: parsed, error: fallbackError };
+      return {
+        ok: false as const,
+        data: parsed,
+        error: `${fallbackError} (HTTP ${response.status})`,
+      };
     }
     return { ok: true as const, data: parsed };
   };
@@ -432,17 +439,12 @@ export const ScannerView: React.FC = () => {
     return acc;
   }, {} as Record<string, number>);
 
-  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-
+  const scanReceiptDataUrl = async (resizedBase64: string) => {
     setIsScanningReceipt(true);
     setReceiptError(null);
     setAllotSuccess(false);
 
     try {
-      const resizedBase64 = await resizeImageFileToDataUrl(file);
       setReceiptImage(resizedBase64);
 
       // Guest/Demo Mode returns sample results locally with no Gemini API call
@@ -538,6 +540,32 @@ export const ScannerView: React.FC = () => {
     } finally {
       setIsScanningReceipt(false);
     }
+  };
+
+  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    try {
+      const resizedBase64 = await resizeImageFileToDataUrl(file);
+      await scanReceiptDataUrl(resizedBase64);
+    } catch (err) {
+      setReceiptError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not read the selected image file.'
+      );
+    }
+  };
+
+  const handleOpenDirectCamera = () => {
+    if (isScanningReceipt) return;
+    if (user && !hasGeminiConsentRef.current) {
+      setConsentDialogMode('camera');
+      return;
+    }
+    setIsCameraScannerOpen(true);
   };
 
   const loadSampleReceipt = (sample: (typeof SAMPLE_RECEIPTS)[0]) => {
@@ -698,6 +726,17 @@ export const ScannerView: React.FC = () => {
                     className="hidden"
                   />
                 </label>
+
+                <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
+                  Scanning a paper store receipt?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setImportMode('receipt')}
+                    className="font-semibold text-[#111315] dark:text-[#C8EC45] underline"
+                  >
+                    Switch to Store Receipt
+                  </button>
+                </p>
 
                 {isGuestMode && (
                   <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
@@ -979,36 +1018,47 @@ export const ScannerView: React.FC = () => {
 
                 <div>
                   <h3 className="text-sm font-bold text-[#111315] dark:text-[#F4F5F0]">
-                    Upload Store Receipt
+                    Scan or Upload Store Receipt
                   </h3>
                   <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689] mt-1">
                     Emart, Mega Coffee, CU, GS25, Paris Baguette, Olive Young
                   </p>
                 </div>
 
-                <label className="w-full py-3 px-4 rounded-xl bg-[#141617] hover:bg-[#23272A] dark:bg-[#C8EC45] dark:hover:bg-[#B8DE35] text-white dark:text-[#111315] font-semibold text-xs transition flex items-center justify-center gap-2 cursor-pointer">
-                  {isScanningReceipt ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Reading line items...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="w-4 h-4" />
-                      <span>Take Photo / Upload Image</span>
-                    </>
-                  )}
-                  <input
-                    ref={receiptFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onClick={(e) => handleFileInputClick(e, 'receipt')}
-                    onChange={handleReceiptUpload}
+                <div className="space-y-2.5">
+                  <button
+                    type="button"
+                    onClick={handleOpenDirectCamera}
                     disabled={isScanningReceipt}
-                    className="hidden"
-                  />
-                </label>
+                    className="w-full py-3 px-4 rounded-xl bg-[#141617] hover:bg-[#23272A] dark:bg-[#C8EC45] dark:hover:bg-[#B8DE35] text-white dark:text-[#111315] font-semibold text-xs transition flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isScanningReceipt ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Reading line items...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ScanLine className="w-4 h-4" />
+                        <span>Scan Receipt with Camera</span>
+                      </>
+                    )}
+                  </button>
+
+                  <label className="w-full py-2.5 px-4 rounded-xl bg-[#F4F5F0] hover:bg-black/[0.06] dark:bg-white/[0.06] dark:hover:bg-white/[0.1] border border-black/[0.07] dark:border-white/[0.08] text-[#111315] dark:text-[#F4F5F0] font-semibold text-xs transition flex items-center justify-center gap-2 cursor-pointer">
+                    <ImagePlus className="w-4 h-4" />
+                    <span>Upload Receipt Photo</span>
+                    <input
+                      ref={receiptFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onClick={(e) => handleFileInputClick(e, 'receipt')}
+                      onChange={handleReceiptUpload}
+                      disabled={isScanningReceipt}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
 
                 {isGuestMode && (
                   <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
@@ -1313,8 +1363,18 @@ export const ScannerView: React.FC = () => {
           setConsentDialogMode(null);
           if (targetMode === 'bank') bankFileInputRef.current?.click();
           if (targetMode === 'receipt') receiptFileInputRef.current?.click();
+          if (targetMode === 'camera') setIsCameraScannerOpen(true);
         }}
         onCancel={() => setConsentDialogMode(null)}
+      />
+
+      <ReceiptCameraModal
+        isOpen={isCameraScannerOpen}
+        onClose={() => setIsCameraScannerOpen(false)}
+        onCapture={(dataUrl) => {
+          void scanReceiptDataUrl(dataUrl);
+        }}
+        onFallbackUpload={() => receiptFileInputRef.current?.click()}
       />
     </div>
   );

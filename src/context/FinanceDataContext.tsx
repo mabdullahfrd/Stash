@@ -18,21 +18,25 @@ import {
   CharityPledge,
   CurrencyCode,
   ExchangeRates,
+  SavingsGoal,
   Transaction,
 } from '../types/finance';
 import {
   INITIAL_ACCOUNTS,
   INITIAL_CATEGORIES,
   INITIAL_CHARITY_PLEDGES,
+  INITIAL_SAVINGS_GOALS,
   INITIAL_TRANSACTIONS,
 } from '../data/seedData';
-import { DEFAULT_EXCHANGE_RATES, formatCurrency, roundCurrencyAmount } from '../utils/currencies';
+import { convertCurrency, DEFAULT_EXCHANGE_RATES, formatCurrency, roundCurrencyAmount } from '../utils/currencies';
 import {
   computeAccountBalances,
   computeCashFlow,
   computeCharityStats,
   computeNetWorth,
   computePledgeFulfillment,
+  computeSavingsContribution,
+  computeSavingsStats,
 } from '../utils/calculations';
 import { useAuth } from './AuthContext';
 import { useFinanceUI } from './UIContext';
@@ -80,6 +84,7 @@ export interface ImportBackupResult {
     accounts: number;
     transactions: number;
     pledges: number;
+    savingsGoals: number;
   };
 }
 
@@ -88,25 +93,35 @@ export interface PledgeFulfillResult {
   error?: string;
 }
 
+export type SavingsContributeResult = PledgeFulfillResult;
+
 const DATA_STORAGE_KEYS = {
   ACCOUNTS: 'stash_krw_accounts_v5',
   TRANSACTIONS: 'stash_krw_transactions_v5',
   CATEGORIES: 'stash_krw_categories_v5',
   CHARITY: 'stash_krw_charity_v5',
+  SAVINGS: 'stash_krw_savings_v5',
   CURRENCY: 'stash_krw_currency_v5',
 };
 
 function mergeCategories(stored: Category[] | null): Category[] {
   const baseList = Array.isArray(stored) && stored.length > 0 ? stored : INITIAL_CATEGORIES;
-  const cleaned = baseList.filter((c) => c.id !== 'cat-transfer');
-  const existingIds = new Set(cleaned.map((c) => c.id));
-  const merged = [...cleaned];
-  for (const cat of INITIAL_CATEGORIES) {
-    if (!existingIds.has(cat.id)) {
-      merged.push(cat);
+  const cleaned = baseList
+    .filter((c) => c.id !== 'cat-transfer')
+    .map((c) =>
+      c.id === 'cat-icecream' && c.name === 'Ice Cream & Treats'
+        ? { ...c, name: 'Ice Cream', icon: 'IceCream', color: '#FF2D55' }
+        : c
+    );
+  const byId = new Map(cleaned.map((c) => [c.id, c]));
+  const canonicalIds = new Set(INITIAL_CATEGORIES.map((c) => c.id));
+  const ordered: Category[] = INITIAL_CATEGORIES.map((cat) => byId.get(cat.id) || cat);
+  for (const cat of cleaned) {
+    if (!canonicalIds.has(cat.id)) {
+      ordered.push(cat);
     }
   }
-  return merged;
+  return ordered;
 }
 
 export interface FinanceDataContextType {
@@ -114,6 +129,7 @@ export interface FinanceDataContextType {
   transactions: Transaction[];
   categories: Category[];
   charityPledges: CharityPledge[];
+  savingsGoals: SavingsGoal[];
   activeCurrency: CurrencyCode;
   rates: ExchangeRates;
   ratesUpdatedAt: string;
@@ -137,6 +153,13 @@ export interface FinanceDataContextType {
     totalPending: number;
     fulfillmentPercent: number;
     pendingPledgesCount: number;
+  };
+  savingsStats: {
+    totalTarget: number;
+    totalSaved: number;
+    totalRemaining: number;
+    progressPercent: number;
+    activeGoalsCount: number;
   };
 
   setActiveCurrency: (currency: CurrencyCode) => void;
@@ -171,6 +194,23 @@ export interface FinanceDataContextType {
     notes?: string
   ) => Promise<PledgeFulfillResult>;
   deleteCharityPledge: (id: string) => Promise<void>;
+
+  addSavingsGoal: (goal: {
+    title: string;
+    category: string;
+    targetAmount: number;
+    currency: CurrencyCode;
+    targetDate?: string;
+    notes?: string;
+  }) => Promise<void>;
+  contributeSavingsGoal: (
+    goalId: string,
+    amount: number,
+    accountId: string,
+    notes?: string,
+    toAccountId?: string
+  ) => Promise<SavingsContributeResult>;
+  deleteSavingsGoal: (id: string) => Promise<void>;
 
   resetToDefaultData: () => Promise<void>;
   clearAllDataToZero: () => Promise<void>;
@@ -224,6 +264,16 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       return getStorageJSON<CharityPledge[]>(
         DATA_STORAGE_KEYS.CHARITY,
         INITIAL_CHARITY_PLEDGES
+      );
+    }
+    return [];
+  });
+
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(() => {
+    if (!user && isGuest) {
+      return getStorageJSON<SavingsGoal[]>(
+        DATA_STORAGE_KEYS.SAVINGS,
+        INITIAL_SAVINGS_GOALS
       );
     }
     return [];
@@ -302,11 +352,18 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
             INITIAL_CHARITY_PLEDGES
           )
         );
+        setSavingsGoals(
+          getStorageJSON<SavingsGoal[]>(
+            DATA_STORAGE_KEYS.SAVINGS,
+            INITIAL_SAVINGS_GOALS
+          )
+        );
       } else {
         const empty = buildEmptyStarterState();
         setAccounts(empty.accounts);
         setTransactions(empty.transactions);
         setCharityPledges(empty.charityPledges);
+        setSavingsGoals(empty.savingsGoals);
       }
       return;
     }
@@ -319,12 +376,14 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
     setAccounts([]);
     setTransactions([]);
     setCharityPledges([]);
+    setSavingsGoals([]);
 
     upsertUserProfile(user, activeCurrencyRef.current);
 
     const accountsPath = `users/${uid}/accounts`;
     const txsPath = `users/${uid}/transactions`;
     const pledgesPath = `users/${uid}/charity_pledges`;
+    const savingsPath = `users/${uid}/savings_goals`;
 
     const unsubAccounts = onSnapshot(
       collection(db, accountsPath),
@@ -373,10 +432,24 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     );
 
+    const unsubSavings = onSnapshot(
+      collection(db, savingsPath),
+      (snapshot) => {
+        const cloudGoals = snapshot.empty
+          ? []
+          : snapshot.docs.map((d) => d.data() as SavingsGoal);
+        setSavingsGoals(cloudGoals);
+      },
+      (error) => {
+        logFirestoreError(error, OperationType.LIST, savingsPath);
+      }
+    );
+
     return () => {
       unsubAccounts();
       unsubTxs();
       unsubPledges();
+      unsubSavings();
     };
   }, [user?.uid, isGuest, setSelectedBankFilter]);
 
@@ -402,6 +475,12 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [charityPledges, user, isGuest]);
 
+  useEffect(() => {
+    if (!user && isGuest) {
+      setStorageJSON(DATA_STORAGE_KEYS.SAVINGS, savingsGoals);
+    }
+  }, [savingsGoals, user, isGuest]);
+
   const setActiveCurrency = useCallback((curr: CurrencyCode) => {
     setActiveCurrencyState(curr);
     setStorageItem(DATA_STORAGE_KEYS.CURRENCY, curr);
@@ -425,6 +504,11 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
   const charityStats = useMemo(
     () => computeCharityStats(charityPledges, activeCurrency, rates),
     [charityPledges, activeCurrency, rates]
+  );
+
+  const savingsStats = useMemo(
+    () => computeSavingsStats(savingsGoals, activeCurrency, rates),
+    [savingsGoals, activeCurrency, rates]
   );
 
   const addTransaction = useCallback(
@@ -580,6 +664,8 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
   accountsRef.current = accounts;
   const charityPledgesRef = useRef(charityPledges);
   charityPledgesRef.current = charityPledges;
+  const savingsGoalsRef = useRef(savingsGoals);
+  savingsGoalsRef.current = savingsGoals;
 
   const editTransaction = useCallback(
     async (id: string, updates: Partial<Transaction>) => {
@@ -890,24 +976,197 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
     [user]
   );
 
+  const addSavingsGoal = useCallback(
+    async (goalData: {
+      title: string;
+      category: string;
+      targetAmount: number;
+      currency: CurrencyCode;
+      targetDate?: string;
+      notes?: string;
+    }) => {
+      const now = localDateString();
+      const newGoal: SavingsGoal = sanitizeForFirestore({
+        ...goalData,
+        id: generateId('goal'),
+        savedAmount: 0,
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      });
+      setSavingsGoals((prev) => [newGoal, ...prev]);
+
+      if (user) {
+        const path = `users/${user.uid}/savings_goals/${newGoal.id}`;
+        try {
+          await setDoc(
+            doc(db, 'users', user.uid, 'savings_goals', newGoal.id),
+            sanitizeForFirestore({
+              ...newGoal,
+              userId: user.uid,
+            })
+          );
+        } catch (error) {
+          const info = logFirestoreError(error, OperationType.WRITE, path);
+          setSyncError(`Failed to sync savings goal: ${info.error}`);
+        }
+      }
+    },
+    [user]
+  );
+
+  const contributeSavingsGoal = useCallback(
+    async (
+      goalId: string,
+      amount: number,
+      accountId: string,
+      notes?: string,
+      toAccountId?: string
+    ): Promise<SavingsContributeResult> => {
+      const goal = savingsGoalsRef.current.find((g) => g.id === goalId);
+      if (!goal) {
+        return { ok: false, error: 'Savings goal not found.' };
+      }
+
+      const sourceAccount = accountsRef.current.find(
+        (a) => a.id === accountId && !a.isArchived
+      );
+      if (!sourceAccount) {
+        return {
+          ok: false,
+          error: 'Select an active bank account to record this deposit.',
+        };
+      }
+
+      const destAccount =
+        toAccountId && toAccountId !== sourceAccount.id
+          ? accountsRef.current.find((a) => a.id === toAccountId && !a.isArchived)
+          : undefined;
+
+      const depositAmount = roundCurrencyAmount(amount, sourceAccount.currency);
+      const contribution = computeSavingsContribution(
+        goal,
+        depositAmount,
+        sourceAccount.currency,
+        rates
+      );
+
+      if (!contribution.ok) {
+        return { ok: false, error: contribution.error };
+      }
+
+      const savingsCat =
+        categories.find((c) => c.id === 'cat-savings') ||
+        getFallbackCategory(categories, 'expense');
+
+      const today = localDateString();
+      const now = new Date().toISOString();
+
+      const resolvedToAmount = destAccount
+        ? destAccount.currency === sourceAccount.currency
+          ? depositAmount
+          : convertCurrency(depositAmount, sourceAccount.currency, destAccount.currency, rates)
+        : undefined;
+
+      const newTx: Transaction = sanitizeForFirestore({
+        id: generateId('tx-savings'),
+        type: destAccount ? 'transfer' : 'expense',
+        amount: depositAmount,
+        toAmount: resolvedToAmount,
+        currency: sourceAccount.currency,
+        date: today,
+        categoryId: savingsCat.id,
+        accountId: sourceAccount.id,
+        toAccountId: destAccount ? destAccount.id : undefined,
+        merchant: `Savings: ${goal.title}`,
+        notes: notes?.trim() || `Saved toward "${goal.title}"`,
+        savingsGoalId: goal.id,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const updatedGoal: SavingsGoal = sanitizeForFirestore({
+        ...goal,
+        savedAmount: contribution.newSavedAmount,
+        status: contribution.newStatus,
+        updatedAt: now,
+      });
+
+      setTransactions((prev) => [newTx, ...prev]);
+      setSavingsGoals((prev) =>
+        prev.map((g) => (g.id === goalId ? updatedGoal : g))
+      );
+      recordDailyActivity();
+      addXp(30, 'Savings goal contribution');
+
+      if (user) {
+        try {
+          const batch = writeBatch(db);
+          batch.set(
+            doc(db, 'users', user.uid, 'transactions', newTx.id),
+            sanitizeForFirestore({
+              ...newTx,
+              userId: user.uid,
+            })
+          );
+          batch.set(
+            doc(db, 'users', user.uid, 'savings_goals', goalId),
+            sanitizeForFirestore({
+              ...updatedGoal,
+              userId: user.uid,
+            })
+          );
+          await batch.commit();
+        } catch (error) {
+          const info = logFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+          setSyncError(`Failed to sync savings deposit: ${info.error}`);
+          return { ok: false, error: 'Failed to sync savings deposit to cloud.' };
+        }
+      }
+
+      return { ok: true };
+    },
+    [user, rates, categories, recordDailyActivity, addXp]
+  );
+
+  const deleteSavingsGoal = useCallback(
+    async (id: string) => {
+      setSavingsGoals((prev) => prev.filter((g) => g.id !== id));
+
+      if (user) {
+        const path = `users/${user.uid}/savings_goals/${id}`;
+        try {
+          await deleteDoc(doc(db, 'users', user.uid, 'savings_goals', id));
+        } catch (error) {
+          const info = logFirestoreError(error, OperationType.DELETE, path);
+          setSyncError(`Failed to delete savings goal: ${info.error}`);
+        }
+      }
+    },
+    [user]
+  );
+
   const clearAllDataToZero = useCallback(async () => {
     const empty = buildEmptyStarterState();
     setAccounts(empty.accounts);
     setTransactions(empty.transactions);
     setCharityPledges(empty.charityPledges);
+    setSavingsGoals(empty.savingsGoals);
     setSelectedBankFilter(null);
 
     if (user) {
       try {
-        const [accSnap, txSnap, pledgeSnap] = await Promise.all([
+        const [accSnap, txSnap, pledgeSnap, savingsSnap] = await Promise.all([
           getDocs(collection(db, `users/${user.uid}/accounts`)),
           getDocs(collection(db, `users/${user.uid}/transactions`)),
           getDocs(collection(db, `users/${user.uid}/charity_pledges`)),
+          getDocs(collection(db, `users/${user.uid}/savings_goals`)),
         ]);
         const refs: DocumentReference[] = [
           ...accSnap.docs.map((d) => d.ref),
           ...txSnap.docs.map((d) => d.ref),
           ...pledgeSnap.docs.map((d) => d.ref),
+          ...savingsSnap.docs.map((d) => d.ref),
         ];
         await commitFirestoreOpsInChunks(refs, (batch, ref) => batch.delete(ref));
       } catch (e) {
@@ -926,6 +1185,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
     setTransactions(INITIAL_TRANSACTIONS);
     setCategories(INITIAL_CATEGORIES);
     setCharityPledges(INITIAL_CHARITY_PLEDGES);
+    setSavingsGoals(INITIAL_SAVINGS_GOALS);
     setActiveCurrencyState('KRW');
     setSelectedBankFilter(null);
   }, [user, clearAllDataToZero, setSelectedBankFilter]);
@@ -936,9 +1196,10 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       transactions,
       categories,
       charityPledges,
+      savingsGoals,
       exportDate: new Date().toISOString(),
       primaryCurrency: activeCurrency,
-      version: '3.0.0',
+      version: '3.1.0',
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: 'application/json',
@@ -949,7 +1210,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
     a.download = `Stash_Finance_${localDateString()}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [accounts, transactions, categories, charityPledges, activeCurrency]);
+  }, [accounts, transactions, categories, charityPledges, savingsGoals, activeCurrency]);
 
   const exportTransactionsCSV = useCallback(() => {
     const csvContent = buildTransactionsCsv(transactions, categories, accounts);
@@ -974,6 +1235,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
         transactions: nextTxs,
         categories: nextCats,
         charityPledges: nextPledges,
+        savingsGoals: nextGoals = [],
         primaryCurrency,
       } = parsed.data;
 
@@ -983,6 +1245,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
         setCategories(mergeCategories(nextCats));
       }
       setCharityPledges(nextPledges);
+      setSavingsGoals(nextGoals);
       if (primaryCurrency) {
         setActiveCurrency(primaryCurrency);
       }
@@ -993,7 +1256,8 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
           type WriteTarget =
             | { collectionName: 'accounts'; data: Account }
             | { collectionName: 'transactions'; data: Transaction }
-            | { collectionName: 'charity_pledges'; data: CharityPledge };
+            | { collectionName: 'charity_pledges'; data: CharityPledge }
+            | { collectionName: 'savings_goals'; data: SavingsGoal };
 
           const targets: WriteTarget[] = [
             ...nextAccs.map((data) => ({ collectionName: 'accounts' as const, data })),
@@ -1003,6 +1267,10 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
             })),
             ...nextPledges.map((data) => ({
               collectionName: 'charity_pledges' as const,
+              data,
+            })),
+            ...nextGoals.map((data) => ({
+              collectionName: 'savings_goals' as const,
               data,
             })),
           ];
@@ -1032,6 +1300,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
           accounts: nextAccs.length,
           transactions: nextTxs.length,
           pledges: nextPledges.length,
+          savingsGoals: nextGoals.length,
         },
       };
     },
@@ -1044,6 +1313,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       transactions,
       categories,
       charityPledges,
+      savingsGoals,
       activeCurrency,
       rates,
       ratesUpdatedAt,
@@ -1056,6 +1326,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       netWorth,
       cashFlow,
       charityStats,
+      savingsStats,
       setActiveCurrency,
       addTransaction,
       addBatchTransactions,
@@ -1067,6 +1338,9 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       addCharityPledge,
       fulfillCharityPledge,
       deleteCharityPledge,
+      addSavingsGoal,
+      contributeSavingsGoal,
+      deleteSavingsGoal,
       resetToDefaultData,
       clearAllDataToZero,
       exportDataJSON,
@@ -1079,6 +1353,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       transactions,
       categories,
       charityPledges,
+      savingsGoals,
       activeCurrency,
       rates,
       ratesUpdatedAt,
@@ -1091,6 +1366,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       netWorth,
       cashFlow,
       charityStats,
+      savingsStats,
       setActiveCurrency,
       addTransaction,
       addBatchTransactions,
@@ -1102,6 +1378,9 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       addCharityPledge,
       fulfillCharityPledge,
       deleteCharityPledge,
+      addSavingsGoal,
+      contributeSavingsGoal,
+      deleteSavingsGoal,
       resetToDefaultData,
       clearAllDataToZero,
       exportDataJSON,

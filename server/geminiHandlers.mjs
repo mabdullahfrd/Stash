@@ -16,27 +16,20 @@ import {
   SlidingWindowRateLimiter,
   validateBankScreenshotRequest,
   validateScanReceiptRequest,
-} from './geminiValidation.ts';
+} from './geminiValidation.mjs';
 
-export interface ApiRequest {
-  method?: string;
-  body?: unknown;
-  headers?: Record<string, string | string[] | undefined>;
-}
-
-export interface ApiResponse {
-  status(code: number): ApiResponse;
-  json(data: unknown): unknown;
-  setHeader?(name: string, value: string): unknown;
-}
-
+const DEFAULT_FIREBASE_PROJECT_ID = 'gen-lang-client-0154914697';
 const perUserLimiter = new SlidingWindowRateLimiter(20, 60 * 60 * 1000);
 
-function resolveProjectId(): string | undefined {
+/**
+ * @returns {string}
+ */
+function resolveProjectId() {
   if (process.env.FIREBASE_PROJECT_ID) {
     return process.env.FIREBASE_PROJECT_ID;
   }
-  const candidatePaths: Array<URL | string> = [];
+  /** @type {Array<URL | string>} */
+  const candidatePaths = [];
   if (typeof import.meta !== 'undefined' && import.meta.url) {
     candidatePaths.push(new URL('../firebase-applet-config.json', import.meta.url));
   }
@@ -45,14 +38,16 @@ function resolveProjectId(): string | undefined {
   for (const configPath of candidatePaths) {
     try {
       if (fs.existsSync(configPath)) {
-        const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8')) as { projectId?: string };
-        if (parsed.projectId) return parsed.projectId;
+        const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        if (parsed && typeof parsed.projectId === 'string' && parsed.projectId) {
+          return parsed.projectId;
+        }
       }
     } catch (err) {
       console.error('Failed to read firebase-applet-config.json for projectId:', err);
     }
   }
-  return undefined;
+  return DEFAULT_FIREBASE_PROJECT_ID;
 }
 
 function getFirebaseAdminAuth() {
@@ -66,18 +61,20 @@ function getFirebaseAdminAuth() {
         });
       } catch (err) {
         console.error('Invalid FIREBASE_SERVICE_ACCOUNT JSON, falling back to projectId:', err);
-        const projectId = resolveProjectId();
-        initializeApp(projectId ? { projectId } : undefined);
+        initializeApp({ projectId: resolveProjectId() });
       }
     } else {
-      const projectId = resolveProjectId();
-      initializeApp(projectId ? { projectId } : undefined);
+      initializeApp({ projectId: resolveProjectId() });
     }
   }
   return getAuth(getApp());
 }
 
-function extractBearerToken(headers?: Record<string, string | string[] | undefined>): string | null {
+/**
+ * @param {Record<string, string | string[] | undefined>} [headers]
+ * @returns {string | null}
+ */
+function extractBearerToken(headers) {
   if (!headers) return null;
   const authHeader = headers.authorization ?? headers.Authorization;
   const raw = Array.isArray(authHeader) ? authHeader[0] : authHeader;
@@ -86,10 +83,12 @@ function extractBearerToken(headers?: Record<string, string | string[] | undefin
   return match ? match[1].trim() : null;
 }
 
-async function verifyAuthenticatedUser(
-  req: ApiRequest,
-  res: ApiResponse
-): Promise<string | null> {
+/**
+ * @param {{ method?: string; body?: unknown; headers?: Record<string, string | string[] | undefined> }} req
+ * @param {{ status(code: number): any; json(data: unknown): unknown; setHeader?(name: string, value: string): unknown }} res
+ * @returns {Promise<string | null>}
+ */
+async function verifyAuthenticatedUser(req, res) {
   const token = extractBearerToken(req.headers);
   if (!token) {
     res.status(401).json({ error: 'Authentication required. Please sign in to use AI scanning.' });
@@ -107,7 +106,7 @@ async function verifyAuthenticatedUser(
   }
 }
 
-function getGeminiClient(): GoogleGenAI | null {
+function getGeminiClient() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
   return new GoogleGenAI({
@@ -120,23 +119,39 @@ function getGeminiClient(): GoogleGenAI | null {
   });
 }
 
-function parseBodyObject(body: unknown): Record<string, unknown> {
+/**
+ * @param {unknown} body
+ * @returns {Record<string, unknown>}
+ */
+function parseBodyObject(body) {
   if (!body) return {};
+  if (Buffer.isBuffer(body)) {
+    try {
+      const parsed = JSON.parse(body.toString('utf8'));
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
   if (typeof body === 'string') {
     try {
       const parsed = JSON.parse(body);
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
     } catch {
       return {};
     }
   }
   if (typeof body === 'object') {
-    return body as Record<string, unknown>;
+    return /** @type {Record<string, unknown>} */ (body);
   }
   return {};
 }
 
-export async function handleScanReceipt(req: ApiRequest, res: ApiResponse) {
+/**
+ * @param {{ method?: string; body?: unknown; headers?: Record<string, string | string[] | undefined> }} req
+ * @param {{ status(code: number): any; json(data: unknown): unknown; setHeader?(name: string, value: string): unknown }} res
+ */
+export async function handleScanReceipt(req, res) {
   if (req.method && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -163,7 +178,7 @@ export async function handleScanReceipt(req: ApiRequest, res: ApiResponse) {
   const ai = getGeminiClient();
   if (!ai) {
     return res.status(503).json({
-      error: 'Receipt scanning is temporarily unavailable because the server API key is not configured.',
+      error: 'Receipt scanning is temporarily unavailable because GEMINI_API_KEY is not configured on the server.',
     });
   }
 
@@ -174,14 +189,23 @@ Primary currency: ${targetCurrency}.
 Allowed category names:
 - "Groceries (Eggs, Bread, Milk)" (eggs, bread, milk, produce, convenience groceries)
 - "Coffee & Drinks" (coffee, latte, americano, tea, juice, cafe drinks)
-- "Ice Cream & Treats" (ice cream, gelato, dessert, pastry, snacks)
+- "Ice Cream" (ice cream, gelato, bingsu, popsicles, soft serve, Baskin Robbins)
+- "Treats & Snacks" (cookies, chocolate, cake, macarons, donuts, pastries, candy, chips)
 - "Dining & Takeout" (meals, restaurant food, delivery, takeout)
 - "Study & Uni Gear" (stationery, books, notebooks, campus supplies)
 - "Transit & Metro" (subway, bus, taxi, T-money)
+- "Travel & Flights" (flights, hotels, KTX, airport rail, travel)
 - "Bills & Rent" (utilities, phone, internet, rent)
 - "Subscriptions" (software, music, streaming, memberships)
-- "Health" (pharmacy, clinic, fitness)
-- "Shopping" (clothing, electronics, personal items)
+- "Health" (pharmacy, clinic, medicine, doctor)
+- "Fitness & Sports" (gym, pilates, sports, workout gear)
+- "Beauty & Personal Care" (Olive Young, skincare, cosmetics, salon)
+- "Entertainment & Events" (movies, concerts, tickets, events)
+- "Shopping" (clothing, accessories, retail)
+- "Tech & Software" (electronics, chargers, laptops, apps)
+- "Household & Laundry" (detergent, tissue, cleaning, home items)
+- "Gifts & Occasions" (gifts, flowers, presents)
+- "Savings & Goals" (savings transfers or goal deposits)
 - "Charity & Giving" (donations, zakat, charity)
 - "Uncategorized" (anything else)`;
 
@@ -237,7 +261,7 @@ Allowed category names:
     }
 
     return res.status(200).json(normalized);
-  } catch (error: unknown) {
+  } catch (error) {
     console.error('Receipt scan error:', error);
     const classified = classifyGeminiApiError(error, 'Receipt');
     return res.status(classified.status).json({
@@ -246,7 +270,11 @@ Allowed category names:
   }
 }
 
-export async function handleParseBankScreenshot(req: ApiRequest, res: ApiResponse) {
+/**
+ * @param {{ method?: string; body?: unknown; headers?: Record<string, string | string[] | undefined> }} req
+ * @param {{ status(code: number): any; json(data: unknown): unknown; setHeader?(name: string, value: string): unknown }} res
+ */
+export async function handleParseBankScreenshot(req, res) {
   if (req.method && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -273,7 +301,7 @@ export async function handleParseBankScreenshot(req: ApiRequest, res: ApiRespons
   const ai = getGeminiClient();
   if (!ai) {
     return res.status(503).json({
-      error: 'Screenshot import is temporarily unavailable because the server API key is not configured.',
+      error: 'Screenshot import is temporarily unavailable because GEMINI_API_KEY is not configured on the server.',
     });
   }
 
@@ -285,8 +313,8 @@ Rules:
 - Amounts in banking apps may look like "-4,500원" or "4,500원 출금" (expense) or "+120,000원" or "입금" (income). Return "amount" as a positive number and set "type" to "expense" or "income".
 - Parse dates into YYYY-MM-DD (assume year ${today.slice(0, 4)} if month/day like "11.14" or "11월 14일" is shown; fallback to ${today} if no date appears).
 - Assign "category" from:
-  Expense: "Groceries (Eggs, Bread, Milk)", "Coffee & Drinks", "Ice Cream & Treats", "Dining & Takeout", "Study & Uni Gear", "Transit & Metro", "Bills & Rent", "Subscriptions", "Health", "Shopping", "Charity & Giving", "Uncategorized".
-  Income: "Work Placement & Salary", "Tutoring & Campus Job", "Allowance & Inflow", "Uncategorized".
+  Expense: "Groceries (Eggs, Bread, Milk)", "Coffee & Drinks", "Ice Cream", "Treats & Snacks", "Dining & Takeout", "Study & Uni Gear", "Transit & Metro", "Travel & Flights", "Bills & Rent", "Subscriptions", "Health", "Fitness & Sports", "Beauty & Personal Care", "Entertainment & Events", "Shopping", "Tech & Software", "Household & Laundry", "Gifts & Occasions", "Savings & Goals", "Charity & Giving", "Uncategorized".
+  Income: "Work Placement & Salary", "Tutoring & Campus Job", "Allowance & Inflow", "Freelance & Side Gig", "Scholarship & Grants", "Interest & Dividends", "Refunds & Cashback", "Uncategorized".
 - Primary currency fallback: ${targetCurrency}. Optional user hint: ${bankHint}.`;
 
     const response = await ai.models.generateContent({
@@ -338,12 +366,12 @@ Rules:
     const normalized = normalizeBankScreenshotOutput(parsedJson.data, today, targetCurrency);
     if (!normalized) {
       return res.status(422).json({
-        error: 'No payment rows were detected in this screenshot. Make sure the transaction list and amounts are legible.',
+        error: 'No payment rows were detected in this screenshot. Make sure it is a banking/payment history screen (for paper store receipts, use the Store Receipt tab).',
       });
     }
 
     return res.status(200).json(normalized);
-  } catch (error: unknown) {
+  } catch (error) {
     console.error('Bank screenshot parse error:', error);
     const classified = classifyGeminiApiError(error, 'Screenshot');
     return res.status(classified.status).json({

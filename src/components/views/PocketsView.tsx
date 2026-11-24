@@ -16,6 +16,7 @@ import {
   Trash2,
   Pencil,
   CheckCircle2,
+  PiggyBank,
 } from 'lucide-react';
 import { HoldAmount } from '../common/HoldAmount';
 import { MinimalHeader } from '../common/MinimalHeader';
@@ -25,7 +26,7 @@ import { formatCurrency, convertCurrency } from '../../utils/currencies';
 import { findBankPreset } from '../../utils/koreanBanks';
 import { AnalyticsTimeRange, computeItemTypeAnalytics } from '../../utils/itemAnalytics';
 import { ConfirmDialog } from '../common/ConfirmDialog';
-import { Account, CharityPledge, CurrencyCode } from '../../types/finance';
+import { Account, CharityPledge, CurrencyCode, SavingsGoal } from '../../types/finance';
 
 export const PocketsView: React.FC = () => {
   const {
@@ -36,12 +37,17 @@ export const PocketsView: React.FC = () => {
     transactions,
     categories,
     charityPledges,
+    savingsGoals,
+    savingsStats,
     activeCurrency,
     rates,
     deleteAccount,
     addCharityPledge,
     fulfillCharityPledge,
     deleteCharityPledge,
+    addSavingsGoal,
+    contributeSavingsGoal,
+    deleteSavingsGoal,
   } = useFinanceData();
   const {
     selectedBankFilter,
@@ -57,6 +63,23 @@ export const PocketsView: React.FC = () => {
   const [analyticsBankFilter, setAnalyticsBankFilter] = useState<string | null>(null);
   const [selectedItemCategoryFilter, setSelectedItemCategoryFilter] = useState<string | null>(null);
   const [accountPendingDelete, setAccountPendingDelete] = useState<{ account: Account; txCount: number } | null>(null);
+
+  // Savings Goal UI state
+  const [isNewGoalOpen, setIsNewGoalOpen] = useState(false);
+  const [newGoalTitle, setNewGoalTitle] = useState('');
+  const [newGoalCategory, setNewGoalCategory] = useState('Emergency Fund');
+  const [newGoalAmount, setNewGoalAmount] = useState('');
+  const [newGoalCurrency, setNewGoalCurrency] = useState<CurrencyCode>(activeCurrency);
+  const [newGoalTargetDate, setNewGoalTargetDate] = useState('');
+  const [newGoalError, setNewGoalError] = useState('');
+
+  const [contributingGoal, setContributingGoal] = useState<SavingsGoal | null>(null);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositAccountId, setDepositAccountId] = useState('');
+  const [depositToAccountId, setDepositToAccountId] = useState('');
+  const [depositNotes, setDepositNotes] = useState('');
+  const [depositError, setDepositError] = useState('');
+  const [goalPendingDelete, setGoalPendingDelete] = useState<SavingsGoal | null>(null);
 
   // Charity Pledge UI state
   const [isNewPledgeOpen, setIsNewPledgeOpen] = useState(false);
@@ -626,6 +649,346 @@ export const PocketsView: React.FC = () => {
                             </span>
                           </div>
                         </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Savings Goals Card */}
+              <div className="rounded-[24px] bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] p-5 space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <PiggyBank className="w-4 h-4 text-[#141617] dark:text-[#C8EC45] shrink-0" />
+                      <h2 className="text-sm font-bold tracking-tight text-[#111315] dark:text-[#F4F5F0]">
+                        Savings Goals
+                      </h2>
+                    </div>
+                    <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689] mt-0.5 truncate">
+                      {savingsGoals.length > 0
+                        ? `${formatCurrency(savingsStats.totalSaved, activeCurrency)} / ${formatCurrency(savingsStats.totalTarget, activeCurrency)} (${savingsStats.progressPercent}%)`
+                        : 'Build reserves for tuition, travel, or emergencies'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewGoalTitle('');
+                      setNewGoalCategory('Emergency Fund');
+                      setNewGoalAmount('');
+                      setNewGoalCurrency(activeCurrency);
+                      setNewGoalTargetDate('');
+                      setNewGoalError('');
+                      setIsNewGoalOpen((v) => !v);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-[#F4F5F0] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] transition flex items-center gap-1 shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>New Goal</span>
+                  </button>
+                </div>
+
+                {isNewGoalOpen && (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const amt = parseFloat(newGoalAmount);
+                      if (!newGoalTitle.trim()) {
+                        setNewGoalError('Enter a savings goal title.');
+                        return;
+                      }
+                      if (!Number.isFinite(amt) || amt <= 0) {
+                        setNewGoalError('Enter a target amount greater than 0.');
+                        return;
+                      }
+                      await addSavingsGoal({
+                        title: newGoalTitle.trim(),
+                        category: newGoalCategory.trim() || 'Savings',
+                        targetAmount: amt,
+                        currency: newGoalCurrency,
+                        targetDate: newGoalTargetDate || undefined,
+                      });
+                      setIsNewGoalOpen(false);
+                    }}
+                    className="p-3.5 rounded-2xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-black/[0.06] dark:border-white/[0.08] space-y-2.5 text-xs"
+                  >
+                    {newGoalError && (
+                      <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+                        {newGoalError}
+                      </p>
+                    )}
+                    <div>
+                      <label htmlFor="new-goal-title" className="sr-only">
+                        Savings goal title
+                      </label>
+                      <input
+                        id="new-goal-title"
+                        type="text"
+                        value={newGoalTitle}
+                        onChange={(e) => setNewGoalTitle(e.target.value)}
+                        placeholder="Goal title (e.g. Emergency Buffer)"
+                        className="w-full px-3 py-2 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label htmlFor="new-goal-category" className="sr-only">
+                          Goal category
+                        </label>
+                        <input
+                          id="new-goal-category"
+                          type="text"
+                          value={newGoalCategory}
+                          onChange={(e) => setNewGoalCategory(e.target.value)}
+                          placeholder="Category"
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="new-goal-amount" className="sr-only">
+                          Target amount
+                        </label>
+                        <input
+                          id="new-goal-amount"
+                          type="number"
+                          step="any"
+                          value={newGoalAmount}
+                          onChange={(e) => setNewGoalAmount(e.target.value)}
+                          placeholder="Target"
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] font-mono text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="new-goal-currency" className="sr-only">
+                          Goal currency
+                        </label>
+                        <select
+                          id="new-goal-currency"
+                          value={newGoalCurrency}
+                          onChange={(e) => setNewGoalCurrency(e.target.value as CurrencyCode)}
+                          className="w-full px-2 py-2 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                        >
+                          <option value="KRW">KRW</option>
+                          <option value="USD">USD</option>
+                          <option value="EUR">EUR</option>
+                          <option value="PKR">PKR</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <label htmlFor="new-goal-target-date" className="sr-only">
+                          Target date
+                        </label>
+                        <input
+                          id="new-goal-target-date"
+                          type="date"
+                          value={newGoalTargetDate}
+                          onChange={(e) => setNewGoalTargetDate(e.target.value)}
+                          className="px-3 py-1.5 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsNewGoalOpen(false)}
+                          className="px-3 py-1.5 rounded-lg text-[#6B7268] dark:text-[#8E9689] font-medium"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-3.5 py-1.5 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] font-semibold"
+                        >
+                          Save Goal
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                )}
+
+                {savingsGoals.length === 0 ? (
+                  <p className="text-xs text-[#8E9689] py-4 text-center">
+                    No savings goals yet. Create one to track your savings milestones.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {savingsGoals.map((goal) => {
+                      const pct = Math.min(
+                        100,
+                        goal.targetAmount > 0
+                          ? Math.round((goal.savedAmount / goal.targetAmount) * 100)
+                          : 0
+                      );
+                      const isCompleted =
+                        goal.status === 'completed' ||
+                        goal.savedAmount >= goal.targetAmount;
+                      const isDepositing = contributingGoal?.id === goal.id;
+                      const transferTargets = activeAccounts.filter((a) => a.id !== depositAccountId);
+
+                      return (
+                        <div
+                          key={goal.id}
+                          className="p-3.5 rounded-2xl bg-[#F9FAF7] dark:bg-[#121511] border border-black/[0.06] dark:border-white/[0.06] space-y-2.5"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] truncate">
+                                  {goal.title}
+                                </span>
+                                {isCompleted && (
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-[#C8EC45] shrink-0" />
+                                )}
+                              </div>
+                              <span className="text-[10px] text-[#6B7268] dark:text-[#8E9689]">
+                                {goal.category}
+                                {goal.targetDate ? ` · Target ${goal.targetDate}` : ''}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setContributingGoal(isDepositing ? null : goal);
+                                  setDepositAmount('');
+                                  setDepositAccountId(activeAccounts[0]?.id || '');
+                                  setDepositToAccountId('');
+                                  setDepositNotes('');
+                                  setDepositError('');
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold"
+                              >
+                                {isCompleted ? 'Add More' : 'Add Savings'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setGoalPendingDelete(goal)}
+                                aria-label={`Delete ${goal.title}`}
+                                className="p-1 text-[#8E9689] hover:text-rose-500 transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[11px] font-mono tabular-nums">
+                              <span className="text-[#6B7268] dark:text-[#8E9689]">
+                                {formatCurrency(goal.savedAmount, goal.currency)} /{' '}
+                                {formatCurrency(goal.targetAmount, goal.currency)}
+                              </span>
+                              <span className="font-semibold text-[#111315] dark:text-[#F4F5F0]">
+                                {pct}%
+                              </span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-black/[0.06] dark:bg-white/[0.08] overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-[#C8EC45] transition-all duration-300"
+                                style={{ width: `${Math.max(goal.savedAmount > 0 ? 4 : 0, pct)}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {isDepositing && (
+                            <form
+                              onSubmit={async (e) => {
+                                e.preventDefault();
+                                setDepositError('');
+                                const amt = parseFloat(depositAmount);
+                                const res = await contributeSavingsGoal(
+                                  goal.id,
+                                  amt,
+                                  depositAccountId,
+                                  depositNotes,
+                                  depositToAccountId || undefined
+                                );
+                                if (!res.ok) {
+                                  setDepositError(res.error || 'Unable to record savings deposit.');
+                                  return;
+                                }
+                                setContributingGoal(null);
+                              }}
+                              className="pt-2 border-t border-black/[0.06] dark:border-white/[0.07] space-y-2 text-xs"
+                            >
+                              {depositError && (
+                                <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+                                  {depositError}
+                                </p>
+                              )}
+                              {activeAccounts.length === 0 ? (
+                                <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
+                                  Link a bank account first to add savings toward this goal.
+                                </p>
+                              ) : (
+                                <>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      aria-label={`Deposit amount for ${goal.title}`}
+                                      value={depositAmount}
+                                      onChange={(e) => setDepositAmount(e.target.value)}
+                                      placeholder="Amount"
+                                      className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] font-mono text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                                    />
+                                    <select
+                                      aria-label={`Source account for ${goal.title}`}
+                                      value={depositAccountId}
+                                      onChange={(e) => {
+                                        const nextFrom = e.target.value;
+                                        setDepositAccountId(nextFrom);
+                                        if (depositToAccountId === nextFrom) {
+                                          setDepositToAccountId('');
+                                        }
+                                      }}
+                                      className="px-2 py-1.5 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                                    >
+                                      {activeAccounts.map((acc) => (
+                                        <option key={acc.id} value={acc.id}>
+                                          From: {acc.name} ({acc.currency})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  {transferTargets.length > 0 && (
+                                    <select
+                                      aria-label={`Destination pocket for ${goal.title}`}
+                                      value={depositToAccountId}
+                                      onChange={(e) => setDepositToAccountId(e.target.value)}
+                                      className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                                    >
+                                      <option value="">Set aside in Goal Vault (deduct from account)</option>
+                                      {transferTargets.map((acc) => (
+                                        <option key={acc.id} value={acc.id}>
+                                          Transfer to: {acc.name} ({acc.currency})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
+                                  <div className="flex items-center justify-between gap-2">
+                                    <input
+                                      type="text"
+                                      aria-label={`Savings note for ${goal.title}`}
+                                      value={depositNotes}
+                                      onChange={(e) => setDepositNotes(e.target.value)}
+                                      placeholder="Optional notes"
+                                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                                    />
+                                    <button
+                                      type="submit"
+                                      className="px-3 py-1.5 rounded-lg bg-[#C8EC45] text-[#111315] font-semibold shrink-0"
+                                    >
+                                      Confirm
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </form>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -1320,6 +1683,24 @@ export const PocketsView: React.FC = () => {
           await deleteCharityPledge(id);
         }}
         onCancel={() => setPledgePendingDelete(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(goalPendingDelete)}
+        title={
+          goalPendingDelete
+            ? `Delete "${goalPendingDelete.title}"?`
+            : 'Delete savings goal?'
+        }
+        description="Existing savings transactions remain in your transaction history, while the savings goal tracker is removed."
+        confirmLabel="Delete goal"
+        onConfirm={async () => {
+          if (!goalPendingDelete) return;
+          const id = goalPendingDelete.id;
+          setGoalPendingDelete(null);
+          await deleteSavingsGoal(id);
+        }}
+        onCancel={() => setGoalPendingDelete(null)}
       />
     </div>
   );

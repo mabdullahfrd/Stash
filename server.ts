@@ -10,7 +10,7 @@ import path from 'path';
 import helmet from 'helmet';
 import compression from 'compression';
 import { fileURLToPath } from 'url';
-import { handleParseBankScreenshot, handleScanReceipt } from './server/geminiHandlers.ts';
+import { handleParseBankScreenshot, handleScanReceipt } from './server/geminiHandlers.mjs';
 
 dotenv.config();
 

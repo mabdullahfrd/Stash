@@ -66,4 +66,10 @@ test('computeItemTypeAnalytics splits itemized receipts accurately and groups it
   assert.equal(latteGroup.amount, 10000);
   assert.equal(latteGroup.avgAmount, 5000);
   assert.deepEqual(latteGroup.accountIds.sort(), ['acc-krw-hana', 'acc-krw-toss']);
+
+  // Legacy 'Ice Cream & Treats' Haagen-Dazs item resolves to split 'cat-icecream' category
+  const iceCreamCat = summary.categoryBreakdowns.find((c) => c.categoryId === 'cat-icecream');
+  assert.ok(iceCreamCat);
+  assert.equal(iceCreamCat.categoryName, 'Ice Cream');
+  assert.equal(iceCreamCat.totalAmount, 8000);
 });

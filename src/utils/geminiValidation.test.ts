@@ -13,7 +13,7 @@ import {
   SlidingWindowRateLimiter,
   validateBankScreenshotRequest,
   validateScanReceiptRequest,
-} from '../../server/geminiValidation';
+} from '../../server/geminiValidation.mjs';
 
 const SAMPLE_PNG_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
@@ -103,6 +103,29 @@ test('normalizeReceiptOutput enforces non-negative finite prices, category allow
   assert.equal(normalized.items[0].category, 'Coffee & Drinks');
   assert.equal(normalized.items[1].category, 'Uncategorized');
   assert.equal(normalized.totalAmount, 16500);
+
+  const splitNormalized = normalizeReceiptOutput(
+    {
+      merchant: 'Dessert Shop',
+      totalAmount: 19000,
+      currency: 'KRW',
+      date: '2026-11-20',
+      items: [
+        { name: 'Haagen-Dazs Cup', price: 5000, category: 'Ice Cream' },
+        { name: 'Strawberry Macaron', price: 3500, category: 'Treats & Snacks' },
+        { name: 'Melona Ice Cream Bar', price: 1500, category: 'Ice Cream & Treats' },
+        { name: 'Chocolate Cookie', price: 3000, category: 'Ice Cream & Treats' },
+        { name: 'Gym Day Pass', price: 6000, category: 'Fitness & Sports' },
+      ],
+    },
+    '2026-11-20',
+    'KRW'
+  );
+  assert.ok(splitNormalized);
+  assert.deepEqual(
+    splitNormalized.items.map((it) => it.category),
+    ['Ice Cream', 'Treats & Snacks', 'Ice Cream', 'Treats & Snacks', 'Fitness & Sports']
+  );
 });
 
 test('normalizeBankScreenshotOutput validates entries and falls back unknown categories to Uncategorized', () => {
@@ -114,6 +137,8 @@ test('normalizeBankScreenshotOutput validates entries and falls back unknown cat
       entries: [
         { merchant: 'Mega Coffee', amount: 4500, type: 'expense', date: '2026-11-19', category: 'Coffee & Drinks' },
         { merchant: 'Mystery Store', amount: 15000, type: 'expense', date: 'bad-date', category: 'Random' },
+        { merchant: 'Upwork Freelance', amount: 250000, type: 'income', date: '2026-11-19', category: 'Freelance & Side Gig' },
+        { merchant: 'Merit Grant', amount: 500000, type: 'income', date: '2026-11-19', category: 'Scholarship & Grants' },
         { merchant: 'Refund', amount: -200, type: 'income', date: '2026-11-19', category: 'Allowance & Inflow' },
       ],
     },
@@ -122,9 +147,11 @@ test('normalizeBankScreenshotOutput validates entries and falls back unknown cat
   );
 
   assert.ok(normalized);
-  assert.equal(normalized.entries.length, 2);
+  assert.equal(normalized.entries.length, 4);
   assert.equal(normalized.entries[1].category, 'Uncategorized');
   assert.equal(normalized.entries[1].date, '2026-11-20');
+  assert.equal(normalized.entries[2].category, 'Freelance & Side Gig');
+  assert.equal(normalized.entries[3].category, 'Scholarship & Grants');
 });
 
 test('SlidingWindowRateLimiter caps per-user requests within window and recovers after expiry', () => {
