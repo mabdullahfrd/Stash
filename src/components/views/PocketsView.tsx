@@ -22,16 +22,18 @@ import { HoldAmount } from '../common/HoldAmount';
 import { MinimalHeader } from '../common/MinimalHeader';
 import { BankLogo } from '../common/BankLogo';
 import { TransactionIcon } from '../common/TransactionIcon';
+import { TransactionAmount } from '../common/TransactionAmount';
 import { formatCurrency, convertCurrency } from '../../utils/currencies';
 import { findBankPreset } from '../../utils/koreanBanks';
 import { AnalyticsTimeRange, computeItemTypeAnalytics } from '../../utils/itemAnalytics';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Account, CharityPledge, CurrencyCode, SavingsGoal } from '../../types/finance';
+import { computeCashFlow, computeRecentDailySpending } from '../../utils/calculations';
+import { getDateRangeBounds } from '../../utils/dates';
 
 export const PocketsView: React.FC = () => {
   const {
     netWorth,
-    cashFlow,
     accounts,
     accountBalances,
     transactions,
@@ -59,7 +61,7 @@ export const PocketsView: React.FC = () => {
   } = useFinanceUI();
 
   const [viewMode, setViewMode] = useState<'overview' | 'analytics'>('overview');
-  const [timeRange, setTimeRange] = useState<AnalyticsTimeRange>('all');
+  const [timeRange, setTimeRange] = useState<AnalyticsTimeRange>('month');
   const [analyticsBankFilter, setAnalyticsBankFilter] = useState<string | null>(null);
   const [selectedItemCategoryFilter, setSelectedItemCategoryFilter] = useState<string | null>(null);
   const [accountPendingDelete, setAccountPendingDelete] = useState<{ account: Account; txCount: number } | null>(null);
@@ -99,31 +101,23 @@ export const PocketsView: React.FC = () => {
 
   const activeAccounts = useMemo(() => accounts.filter((a) => !a.isArchived), [accounts]);
 
+  // Rolling last-7-days spending (oldest → today). Recomputed on each render-relevant change.
   const weeklyChartData = useMemo(() => {
-    const days = [
-      { label: 'M', full: 'Monday', amount: 0 },
-      { label: 'T', full: 'Tuesday', amount: 0 },
-      { label: 'W', full: 'Wednesday', amount: 0 },
-      { label: 'T', full: 'Thursday', amount: 0 },
-      { label: 'F', full: 'Friday', amount: 0 },
-      { label: 'S', full: 'Saturday', amount: 0 },
-      { label: 'S', full: 'Sunday', amount: 0 },
-    ];
+    const recent = computeRecentDailySpending(transactions, activeCurrency, rates, new Date(), accounts);
+    const maxAmount = Math.max(...recent.days.map((d) => d.amount), 1);
+    return { ...recent, maxAmount };
+  }, [transactions, activeCurrency, rates, accounts]);
 
-    transactions.forEach((tx) => {
-      if (tx.type === 'expense') {
-        const d = new Date(tx.date || tx.createdAt);
-        const dayIdx = (d.getDay() + 6) % 7;
-        const converted = convertCurrency(tx.amount, tx.currency, activeCurrency, rates);
-        days[dayIdx].amount += converted;
-      }
-    });
+  // Inflow / savings rate for the analytics card, scoped to the selected time range and bank.
+  const rangeCashFlow = useMemo(() => {
+    const scoped = analyticsBankFilter
+      ? transactions.filter((tx) => tx.accountId === analyticsBankFilter)
+      : transactions;
+    return computeCashFlow(scoped, activeCurrency, rates, getDateRangeBounds(timeRange), accounts);
+  }, [transactions, activeCurrency, rates, timeRange, analyticsBankFilter, accounts]);
 
-    const maxAmount = Math.max(...days.map((d) => d.amount), 50000);
-    const highestDay = [...days].sort((a, b) => b.amount - a.amount)[0];
-
-    return { days, maxAmount, highestDay };
-  }, [transactions, activeCurrency, rates]);
+  const timeRangeLabel =
+    timeRange === 'month' ? 'This month' : timeRange === '7d' ? 'Last 7 days' : 'All time';
 
   const itemAnalytics = useMemo(() => {
     return computeItemTypeAnalytics(transactions, categories, activeCurrency, rates, {
@@ -507,10 +501,10 @@ export const PocketsView: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-xs font-medium text-[#6B7268] dark:text-[#8E9689] block">
-                      Spending Summary
+                      Spent in the last 7 days
                     </span>
                     <div className="text-2xl font-bold font-mono tracking-tight text-[#111315] dark:text-[#F4F5F0] tabular-nums mt-0.5">
-                      <HoldAmount amount={cashFlow.totalExpenses} currency={activeCurrency} />
+                      <HoldAmount amount={weeklyChartData.total} currency={activeCurrency} />
                     </div>
                   </div>
                   <span className="text-[11px] font-medium text-[#6B7268] dark:text-[#8E9689]">
@@ -520,7 +514,7 @@ export const PocketsView: React.FC = () => {
 
                 <div className="pt-1">
                   <div className="grid grid-cols-7 gap-2 items-end h-28">
-                    {weeklyChartData.days.map((d, idx) => {
+                    {weeklyChartData.days.map((d) => {
                       const heightPercent = Math.max(
                         14,
                         Math.round((d.amount / weeklyChartData.maxAmount) * 100)
@@ -528,7 +522,7 @@ export const PocketsView: React.FC = () => {
                       const isHighlight = d.amount === weeklyChartData.maxAmount && d.amount > 0;
 
                       return (
-                        <div key={idx} className="flex flex-col items-center h-full justify-end gap-2">
+                        <div key={d.date} className="flex flex-col items-center h-full justify-end gap-2">
                           <div className="w-full flex-1 flex items-end justify-center">
                             <div
                               style={{ height: `${heightPercent}%` }}
@@ -557,7 +551,7 @@ export const PocketsView: React.FC = () => {
                   <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689] pt-3 border-t border-black/[0.05] dark:border-white/[0.06] mt-3">
                     {weeklyChartData.highestDay.amount > 0
                       ? `Peak spending on ${weeklyChartData.highestDay.full} (${formatCurrency(weeklyChartData.highestDay.amount, activeCurrency)})`
-                      : 'No expenses logged this week yet.'}
+                      : 'No expenses logged in the last 7 days.'}
                   </p>
                 </div>
               </div>
@@ -588,9 +582,12 @@ export const PocketsView: React.FC = () => {
                   <div className="divide-y divide-black/[0.05] dark:divide-white/[0.06]">
                     {recentTransactions.map((tx) => {
                       const category = categories.find((c) => c.id === tx.categoryId);
-                      const isIncome = tx.type === 'income';
                       const account = accounts.find((a) => a.id === tx.accountId);
                       const bankInfo = account ? findBankPreset(account.institution || account.name) : null;
+                      const toAccount =
+                        tx.type === 'transfer' && tx.toAccountId
+                          ? accounts.find((a) => a.id === tx.toAccountId)
+                          : undefined;
 
                       return (
                         <button
@@ -622,7 +619,10 @@ export const PocketsView: React.FC = () => {
                                 {bankInfo && account && (
                                   <>
                                     <BankLogo bank={bankInfo} size="xs" />
-                                    <span className="truncate">{account.name}</span>
+                                    <span className="truncate">
+                                      {account.name}
+                                      {toAccount && ` → ${toAccount.name}`}
+                                    </span>
                                     <span>·</span>
                                   </>
                                 )}
@@ -632,21 +632,7 @@ export const PocketsView: React.FC = () => {
                           </div>
 
                           <div className="text-right shrink-0">
-                            <span
-                              className={`text-xs font-bold font-mono tabular-nums ${
-                                isIncome
-                                  ? 'text-emerald-700 dark:text-[#C8EC45]'
-                                  : 'text-[#111315] dark:text-[#F4F5F0]'
-                              }`}
-                            >
-                              <HoldAmount
-                                amount={tx.amount}
-                                currency={tx.currency}
-                                showSign={isIncome}
-                                prefix={isIncome ? '' : '-'}
-                                interactive={false}
-                              />
-                            </span>
+                            <TransactionAmount tx={tx} />
                           </div>
                         </button>
                       );
@@ -1373,15 +1359,15 @@ export const PocketsView: React.FC = () => {
               <div className="rounded-[24px] bg-[#C8EC45] text-[#111315] p-6 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-[#111315]/70">
-                    Total Inflow
+                    Total Inflow · {timeRangeLabel}
                   </span>
                   <ArrowUpRight className="w-4 h-4 text-[#111315]" />
                 </div>
                 <div className="text-3xl font-bold font-mono tracking-tight tabular-nums">
-                  <HoldAmount amount={cashFlow.totalIncome} currency={activeCurrency} showSign />
+                  <HoldAmount amount={rangeCashFlow.totalIncome} currency={activeCurrency} showSign />
                 </div>
                 <p className="text-xs font-medium text-[#111315]/75">
-                  Savings rate {cashFlow.savingsRatePercent}% · Net {formatCurrency(cashFlow.netFlow, activeCurrency)}
+                  Savings rate {rangeCashFlow.savingsRatePercent}% · Net {formatCurrency(rangeCashFlow.netFlow, activeCurrency)}
                 </p>
               </div>
 

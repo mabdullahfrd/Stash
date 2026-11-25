@@ -5,6 +5,59 @@
 
 import { Account, CharityPledge, CurrencyCode, ExchangeRates, SavingsGoal, Transaction } from '../types/finance';
 import { convertCurrency, CURRENCY_REGISTRY, DEFAULT_EXCHANGE_RATES, roundCurrencyAmount } from './currencies';
+import { localDateString, shiftLocalDate } from './dates';
+
+export interface DailySpend {
+  date: string; // YYYY-MM-DD
+  label: string; // Single-letter weekday, e.g. "M"
+  full: string; // e.g. "Monday, Nov 24"
+  amount: number;
+}
+
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * Sums expenses per calendar day for the last `dayCount` days ending today (oldest first).
+ * Transactions outside that window, transfers, income, and entries on removed accounts are ignored.
+ */
+export function computeRecentDailySpending(
+  transactions: Transaction[],
+  targetCurrency: CurrencyCode,
+  rates: ExchangeRates,
+  today: Date = new Date(),
+  accounts?: Account[],
+  dayCount = 7
+): { days: DailySpend[]; total: number; highestDay: DailySpend } {
+  const days: DailySpend[] = [];
+  for (let offset = dayCount - 1; offset >= 0; offset--) {
+    const d = shiftLocalDate(today, offset);
+    const weekday = WEEKDAY_NAMES[d.getDay()];
+    days.push({
+      date: localDateString(d),
+      label: weekday[0],
+      full: `${weekday}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`,
+      amount: 0,
+    });
+  }
+
+  const indexByDate = new Map(days.map((d, i) => [d.date, i]));
+  const existingAccountIds = accounts ? new Set(accounts.map((a) => a.id)) : null;
+  let total = 0;
+
+  for (const tx of transactions) {
+    if (tx.type !== 'expense') continue;
+    if (existingAccountIds && !existingAccountIds.has(tx.accountId)) continue;
+    const idx = indexByDate.get(tx.date);
+    if (idx === undefined) continue;
+    const converted = convertCurrency(tx.amount, tx.currency, targetCurrency, rates);
+    days[idx].amount += converted;
+    total += converted;
+  }
+
+  const highestDay = days.reduce((best, d) => (d.amount > best.amount ? d : best), days[0]);
+  return { days, total, highestDay };
+}
 
 export interface CalculatedAccountBalance {
   accountId: string;

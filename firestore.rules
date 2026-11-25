@@ -56,6 +56,9 @@ service cloud.firestore {
         && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
     }
 
+    // NOTE: Rules cannot iterate lists, so only the first item's shape is checked here.
+    // The client sanitizes every item on read (normalizeTransactionDoc in
+    // src/utils/firestoreSanitize.ts) so malformed entries never reach the UI.
     function isValidReceiptItems(items) {
       return items is list
         && items.size() <= 100

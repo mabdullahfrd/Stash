@@ -49,7 +49,7 @@ import {
   commitFirestoreOpsInChunks,
   clearUserLocalStorageCache,
 } from '../services/firebase';
-import { sanitizeForFirestore } from '../utils/firestoreSanitize';
+import { normalizeTransactionDoc, sanitizeForFirestore } from '../utils/firestoreSanitize';
 import {
   collection,
   onSnapshot,
@@ -74,8 +74,10 @@ import {
   setStorageItem,
   getStorageJSON,
   setStorageJSON,
+  removeStorageItem,
   generateId,
 } from '../utils/storage';
+import { buildGuestImportPlan, GuestImportPlan } from '../utils/guestImport';
 
 export interface ImportBackupResult {
   ok: boolean;
@@ -222,7 +224,19 @@ export interface FinanceDataContextType {
   exportTransactionsCSV: () => void;
   importDataJSON: (jsonString: string) => Promise<ImportBackupResult>;
   confirm10PercentCharity: () => Promise<void>;
+
+  /** Guest-mode entries found on this device after signing in, awaiting the user's choice. */
+  guestImportPlan: GuestImportPlan | null;
+  acceptGuestImport: () => Promise<{ ok: boolean; error?: string }>;
+  dismissGuestImport: () => void;
 }
+
+const GUEST_DATA_KEYS = [
+  'ACCOUNTS',
+  'TRANSACTIONS',
+  'CHARITY',
+  'SAVINGS',
+] as const;
 
 const FinanceDataContext = createContext<FinanceDataContextType | undefined>(undefined);
 
@@ -239,6 +253,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
   const { addXp, recordDailyActivity, markQuestCompleted, setGems } = useGamification();
 
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [guestImportPlan, setGuestImportPlan] = useState<GuestImportPlan | null>(null);
   const prevUserUidRef = useRef<string | null>(null);
 
   const [accounts, setAccounts] = useState<Account[]>(() => {
@@ -340,6 +355,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
         setSyncError(null);
         setSelectedBankFilter(null);
       }
+      setGuestImportPlan(null);
       if (isGuest) {
         setAccounts(
           getStorageJSON<Account[]>(DATA_STORAGE_KEYS.ACCOUNTS, INITIAL_ACCOUNTS)
@@ -382,6 +398,24 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
     setCharityPledges([]);
     setSavingsGoals([]);
 
+    // Guest-mode data stays on the device after sign-in; offer to carry the user's own entries over.
+    setGuestImportPlan(
+      buildGuestImportPlan(
+        {
+          accounts: getStorageJSON<Account[]>(DATA_STORAGE_KEYS.ACCOUNTS, []),
+          transactions: getStorageJSON<Transaction[]>(DATA_STORAGE_KEYS.TRANSACTIONS, []),
+          charityPledges: getStorageJSON<CharityPledge[]>(DATA_STORAGE_KEYS.CHARITY, []),
+          savingsGoals: getStorageJSON<SavingsGoal[]>(DATA_STORAGE_KEYS.SAVINGS, []),
+        },
+        {
+          accounts: INITIAL_ACCOUNTS,
+          transactions: INITIAL_TRANSACTIONS,
+          charityPledges: INITIAL_CHARITY_PLEDGES,
+          savingsGoals: INITIAL_SAVINGS_GOALS,
+        }
+      )
+    );
+
     upsertUserProfile(user, activeCurrencyRef.current);
 
     const accountsPath = `users/${uid}/accounts`;
@@ -409,7 +443,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       (snapshot) => {
         const cloudTxs = snapshot.empty
           ? []
-          : snapshot.docs.map((d) => d.data() as Transaction);
+          : snapshot.docs.map((d) => normalizeTransactionDoc(d.data() as Transaction));
         cloudTxs.sort(
           (a, b) =>
             new Date(b.date || b.createdAt).getTime() -
@@ -1311,6 +1345,52 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
     [user, setActiveCurrency, setSelectedBankFilter]
   );
 
+  const clearGuestDeviceData = useCallback(() => {
+    for (const key of GUEST_DATA_KEYS) {
+      removeStorageItem(DATA_STORAGE_KEYS[key]);
+    }
+  }, []);
+
+  const dismissGuestImport = useCallback(() => {
+    clearGuestDeviceData();
+    setGuestImportPlan(null);
+  }, [clearGuestDeviceData]);
+
+  const acceptGuestImport = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
+    if (!user || !guestImportPlan) return { ok: false, error: 'Nothing to import.' };
+
+    type WriteTarget =
+      | { collectionName: 'accounts'; data: Account }
+      | { collectionName: 'transactions'; data: Transaction }
+      | { collectionName: 'charity_pledges'; data: CharityPledge }
+      | { collectionName: 'savings_goals'; data: SavingsGoal };
+
+    const targets: WriteTarget[] = [
+      ...guestImportPlan.accounts.map((data) => ({ collectionName: 'accounts' as const, data })),
+      ...guestImportPlan.transactions.map((data) => ({ collectionName: 'transactions' as const, data })),
+      ...guestImportPlan.charityPledges.map((data) => ({ collectionName: 'charity_pledges' as const, data })),
+      ...guestImportPlan.savingsGoals.map((data) => ({ collectionName: 'savings_goals' as const, data })),
+    ];
+
+    try {
+      // Merges into the signed-in account; the realtime listeners pick the new docs up.
+      await commitFirestoreOpsInChunks(targets, (batch, item) => {
+        batch.set(
+          doc(db, 'users', user.uid, item.collectionName, item.data.id),
+          sanitizeForFirestore({ ...item.data, userId: user.uid })
+        );
+      });
+    } catch (error) {
+      const info = logFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+      setSyncError(`Failed to import guest data: ${info.error}`);
+      return { ok: false, error: `Import failed: ${info.error}` };
+    }
+
+    clearGuestDeviceData();
+    setGuestImportPlan(null);
+    return { ok: true };
+  }, [user, guestImportPlan, clearGuestDeviceData]);
+
   const value = useMemo<FinanceDataContextType>(
     () => ({
       accounts,
@@ -1351,6 +1431,9 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       exportTransactionsCSV,
       importDataJSON,
       confirm10PercentCharity,
+      guestImportPlan,
+      acceptGuestImport,
+      dismissGuestImport,
     }),
     [
       accounts,
@@ -1391,6 +1474,9 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       exportTransactionsCSV,
       importDataJSON,
       confirm10PercentCharity,
+      guestImportPlan,
+      acceptGuestImport,
+      dismissGuestImport,
     ]
   );
 

@@ -5,7 +5,16 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isValidDateString, localDateString } from './dates';
+import { getDateRangeBounds, isValidDateString, localDateString } from './dates';
+
+test('getDateRangeBounds returns inclusive month-to-date and rolling 7-day windows', () => {
+  const today = new Date(2026, 10, 26); // Nov 26, 2026 (local)
+  assert.equal(getDateRangeBounds('all', today), undefined);
+  assert.deepEqual(getDateRangeBounds('month', today), { start: '2026-11-01', end: '2026-11-26' });
+  assert.deepEqual(getDateRangeBounds('7d', today), { start: '2026-11-20', end: '2026-11-26' });
+  // Crosses a month boundary
+  assert.deepEqual(getDateRangeBounds('7d', new Date(2026, 11, 3)), { start: '2026-11-27', end: '2026-12-03' });
+});
 
 test('localDateString produces local calendar date in Asia/Seoul (2026-11-19T22:30:00Z -> 2026-11-20)', () => {
   const prevTz = process.env.TZ;

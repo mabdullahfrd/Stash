@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { ReceiptItem, Transaction } from '../types/finance';
+
 export const MIN_PASSWORD_LENGTH = 8;
 
 /**
@@ -25,6 +27,44 @@ export function sanitizeForFirestore<T>(value: T): T {
   }
 
   return value;
+}
+
+const MAX_RECEIPT_ITEMS = 100;
+
+/**
+ * Keeps only well-formed receipt items from data read back from the cloud.
+ *
+ * Firestore security rules cannot loop over a list, so `firestore.rules` can only
+ * spot-check receipt items. This read-side guard ensures a malformed item (wrong
+ * types, missing fields) is dropped instead of crashing list rendering or totals.
+ */
+export function sanitizeReceiptItems(raw: unknown): ReceiptItem[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const items: ReceiptItem[] = [];
+  for (const entry of raw.slice(0, MAX_RECEIPT_ITEMS)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const row = entry as Record<string, unknown>;
+    const { id, name, price, category } = row;
+    if (typeof id !== 'string' || id.length === 0 || id.length > 128) continue;
+    if (typeof name !== 'string' || name.trim().length === 0 || name.length > 200) continue;
+    if (typeof price !== 'number' || !Number.isFinite(price) || price < 0 || price > 1e12) continue;
+    if (typeof category !== 'string' || category.length === 0 || category.length > 120) continue;
+    items.push({ id, name, price, category });
+  }
+  return items;
+}
+
+/**
+ * Normalizes a transaction document read from Firestore, sanitizing nested receipt items.
+ */
+export function normalizeTransactionDoc(data: Transaction): Transaction {
+  if (!('receiptItems' in data) || data.receiptItems === undefined) return data;
+  const receiptItems = sanitizeReceiptItems(data.receiptItems);
+  if (!receiptItems) {
+    const { receiptItems: _dropped, ...rest } = data;
+    return rest;
+  }
+  return { ...data, receiptItems };
 }
 
 /**

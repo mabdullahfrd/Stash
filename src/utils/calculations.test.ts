@@ -13,9 +13,47 @@ import {
   computePledgeFulfillment,
   computeSavingsStats,
   computeSavingsContribution,
+  computeRecentDailySpending,
 } from './calculations';
 import { convertCurrency, DEFAULT_EXCHANGE_RATES } from './currencies';
 import { Account, CharityPledge, SavingsGoal, Transaction } from '../types/finance';
+
+test('computeRecentDailySpending only counts expenses from the last 7 days', () => {
+  const today = new Date(2026, 10, 26); // Thu Nov 26, 2026
+  const tx = (id: string, date: string, amount: number, type: Transaction['type'] = 'expense'): Transaction => ({
+    id,
+    type,
+    amount,
+    currency: 'KRW',
+    date,
+    categoryId: 'cat',
+    accountId: 'acc-1',
+    createdAt: `${date}T00:00:00.000Z`,
+    updatedAt: `${date}T00:00:00.000Z`,
+  });
+  const transactions: Transaction[] = [
+    tx('a', '2026-11-26', 5000),
+    tx('b', '2026-11-26', 3000),
+    tx('c', '2026-11-20', 10000), // oldest day in window
+    tx('d', '2026-11-19', 99999), // just outside window
+    tx('e', '2025-11-26', 77777), // same weekday last year — must not count
+    tx('f', '2026-11-24', 40000, 'income'),
+    tx('g', '2026-11-24', 20000, 'transfer'),
+  ];
+
+  const result = computeRecentDailySpending(transactions, 'KRW', DEFAULT_EXCHANGE_RATES, today);
+  assert.equal(result.days.length, 7);
+  assert.equal(result.days[0].date, '2026-11-20');
+  assert.equal(result.days[6].date, '2026-11-26');
+  assert.equal(result.days[6].label, 'T');
+  assert.equal(result.total, 18000);
+  assert.equal(result.days[6].amount, 8000);
+  assert.equal(result.highestDay.date, '2026-11-20');
+
+  // Expenses on removed accounts are ignored when accounts are supplied
+  const none = computeRecentDailySpending(transactions, 'KRW', DEFAULT_EXCHANGE_RATES, today, []);
+  assert.equal(none.total, 0);
+});
 
 test('Currency conversion calculations across USD, EUR, KRW, and PKR', () => {
   // USD to EUR

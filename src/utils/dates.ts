@@ -15,6 +15,33 @@ export function localDateString(date: Date = new Date()): string {
 }
 
 /**
+ * Returns the local date `days` days before `date` (negative values move forward).
+ */
+export function shiftLocalDate(date: Date, days: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() - days);
+}
+
+export type DateRangePreset = 'all' | 'month' | '7d';
+
+/**
+ * Converts a range preset into inclusive YYYY-MM-DD bounds relative to `today`.
+ * - 'all'   → undefined (no filtering)
+ * - 'month' → first day of the current calendar month through today
+ * - '7d'    → today and the 6 days before it
+ */
+export function getDateRangeBounds(
+  range: DateRangePreset,
+  today: Date = new Date()
+): { start: string; end: string } | undefined {
+  if (range === 'all') return undefined;
+  const end = localDateString(today);
+  if (range === 'month') {
+    return { start: `${end.slice(0, 7)}-01`, end };
+  }
+  return { start: localDateString(shiftLocalDate(today, 6)), end };
+}
+
+/**
  * Validates a strict YYYY-MM-DD calendar date string.
  */
 export function isValidDateString(value: unknown): value is string {

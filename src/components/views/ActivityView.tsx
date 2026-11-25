@@ -15,6 +15,7 @@ import { HoldAmount } from '../common/HoldAmount';
 import { MinimalHeader } from '../common/MinimalHeader';
 import { BankLogo } from '../common/BankLogo';
 import { TransactionIcon } from '../common/TransactionIcon';
+import { TransactionAmount } from '../common/TransactionAmount';
 import { findBankPreset } from '../../utils/koreanBanks';
 
 export const ActivityView: React.FC = () => {
@@ -196,9 +197,12 @@ export const ActivityView: React.FC = () => {
             <div className="rounded-[24px] bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] divide-y divide-black/[0.05] dark:divide-white/[0.06] overflow-hidden">
               {filteredTransactions.map((tx) => {
                 const category = categories.find((c) => c.id === tx.categoryId);
-                const isIncome = tx.type === 'income';
                 const account = accounts.find((a) => a.id === tx.accountId);
                 const bankInfo = account ? findBankPreset(account.institution || account.name) : null;
+                const toAccount =
+                  tx.type === 'transfer' && tx.toAccountId
+                    ? accounts.find((a) => a.id === tx.toAccountId)
+                    : undefined;
 
                 return (
                   <button
@@ -235,11 +239,14 @@ export const ActivityView: React.FC = () => {
                                   <BankLogo bank={bankInfo} size="xs" />
                                   {account.name}
                                   {account.isArchived ? ' (Archived)' : ''}
+                                  {toAccount && ` → ${toAccount.name}`}
                                 </span>
                                 <span className="shrink-0">·</span>
                               </>
                             )}
-                            <span className="truncate">{category?.name}</span>
+                            <span className="truncate">
+                              {tx.type === 'transfer' ? 'Transfer' : category?.name}
+                            </span>
                             <span className="shrink-0">·</span>
                             <span className="shrink-0">{tx.date}</span>
                           </div>
@@ -247,21 +254,7 @@ export const ActivityView: React.FC = () => {
                       </div>
 
                       <div className="text-right shrink-0">
-                        <span
-                          className={`text-xs font-bold font-mono tabular-nums ${
-                            isIncome
-                              ? 'text-emerald-700 dark:text-[#C8EC45]'
-                              : 'text-[#111315] dark:text-[#F4F5F0]'
-                          }`}
-                        >
-                          <HoldAmount
-                            amount={tx.amount}
-                            currency={tx.currency}
-                            showSign={isIncome}
-                            prefix={isIncome ? '' : '-'}
-                            interactive={false}
-                          />
-                        </span>
+                        <TransactionAmount tx={tx} />
                       </div>
                     </div>
 
