@@ -10,7 +10,9 @@ import {
   Plus,
   Download,
   Heart,
+  ChevronDown,
 } from 'lucide-react';
+import { formatDayHeading, groupByDay } from '../../utils/dates';
 import { HoldAmount } from '../common/HoldAmount';
 import { MinimalHeader } from '../common/MinimalHeader';
 import { BankLogo } from '../common/BankLogo';
@@ -56,6 +58,29 @@ export const ActivityView: React.FC = () => {
       return true;
     });
   }, [transactions, selectedBankFilter, searchQuery, selectedCategory, categories]);
+
+  const dayGroups = useMemo(() => groupByDay(filteredTransactions), [filteredTransactions]);
+  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
+  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+
+  // Receipt item lists start collapsed so one long receipt doesn't swamp the ledger.
+  const [expandedReceipts, setExpandedReceipts] = useState<Set<string>>(() => new Set());
+  const toggleReceipt = (id: string) => {
+    setExpandedReceipts((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const hasActiveFilters =
+    Boolean(selectedBankFilter) || searchQuery.trim() !== '' || selectedCategory !== 'all';
+  const clearFilters = () => {
+    setSearchQuery('');
+    setSelectedCategory('all');
+    setSelectedBankFilter(null);
+  };
 
   return (
     <div className="flex-1 flex flex-col">
@@ -164,6 +189,18 @@ export const ActivityView: React.FC = () => {
             Inflow
           </button>
 
+          <button
+            onClick={() => setSelectedCategory('charity')}
+            className={`px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition inline-flex items-center gap-1 ${
+              selectedCategory === 'charity'
+                ? 'bg-black/[0.08] dark:bg-white/[0.12] text-[#111315] dark:text-white'
+                : 'text-[#6B7268] dark:text-[#8E9689] hover:text-[#111315] dark:hover:text-white'
+            }`}
+          >
+            <Heart className="w-3 h-3" />
+            Charity
+          </button>
+
           {categories
             .filter((c) => c.type === 'expense')
             .map((cat) => (
@@ -187,100 +224,138 @@ export const ActivityView: React.FC = () => {
             <div className="text-center py-14 rounded-[24px] bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] p-6 space-y-1.5">
               <Search className="w-6 h-6 mx-auto text-[#8E9689] stroke-[1.5]" />
               <h3 className="text-xs font-semibold text-[#111315] dark:text-[#F4F5F0]">
-                No matching transactions
+                {hasActiveFilters ? 'No matching transactions' : 'No transactions yet'}
               </h3>
               <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
-                Clear your bank filter or search query to view all records.
+                {hasActiveFilters
+                  ? 'Your search, bank, or category filter is hiding every entry.'
+                  : 'Tap New Entry to log your first one.'}
               </p>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="mt-3 h-8 px-3.5 rounded-xl bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-xs font-semibold transition active:scale-95"
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
           ) : (
-            <div className="rounded-[24px] bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] divide-y divide-black/[0.05] dark:divide-white/[0.06] overflow-hidden">
-              {filteredTransactions.map((tx) => {
-                const category = categories.find((c) => c.id === tx.categoryId);
-                const account = accounts.find((a) => a.id === tx.accountId);
-                const bankInfo = account ? findBankPreset(account.institution || account.name) : null;
-                const toAccount =
-                  tx.type === 'transfer' && tx.toAccountId
-                    ? accounts.find((a) => a.id === tx.toAccountId)
-                    : undefined;
+            <div className="space-y-4">
+              {dayGroups.map((group) => (
+                <section key={group.date} aria-label={formatDayHeading(group.date)}>
+                  <h2 className="px-1 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#6B7268] dark:text-[#8E9689]">
+                    {formatDayHeading(group.date)}
+                  </h2>
+                  <div className="rounded-[24px] bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] divide-y divide-black/[0.05] dark:divide-white/[0.06] overflow-hidden">
+                    {group.items.map((tx) => {
+                      const category = categoryById.get(tx.categoryId);
+                      const account = accountById.get(tx.accountId);
+                      const bankInfo = account ? findBankPreset(account.institution || account.name) : null;
+                      const toAccount =
+                        tx.type === 'transfer' && tx.toAccountId
+                          ? accountById.get(tx.toAccountId)
+                          : undefined;
+                      const itemCount = tx.receiptItems?.length ?? 0;
+                      const isExpanded = expandedReceipts.has(tx.id);
 
-                return (
-                  <button
-                    key={tx.id}
-                    type="button"
-                    onClick={() => openTransactionModal(tx)}
-                    className="w-full text-left p-4 hover:bg-black/[0.015] dark:hover:bg-white/[0.02] transition space-y-2.5 block"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <TransactionIcon
-                          categoryName={category?.name}
-                          categoryIcon={category?.icon}
-                          merchant={tx.merchant}
-                          type={tx.type}
-                          isCharity={tx.isCharity}
-                          hasReceipt={Boolean(tx.receiptItems?.length)}
-                        />
-
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] truncate">
-                              {tx.merchant || category?.name || 'Transaction'}
-                            </span>
-                            {tx.isCharity && (
-                              <Heart className="w-3 h-3 text-[#6B7268] dark:text-[#C8EC45] shrink-0" />
-                            )}
-                          </div>
-
-                          <div className="text-[11px] text-[#6B7268] dark:text-[#8E9689] flex items-center gap-1.5 mt-0.5 truncate">
-                            {bankInfo && account && (
-                              <>
-                                <span className="inline-flex items-center gap-1.5 text-[#111315] dark:text-[#D5DCD0] font-medium shrink-0">
-                                  <BankLogo bank={bankInfo} size="xs" />
-                                  {account.name}
-                                  {account.isArchived ? ' (Archived)' : ''}
-                                  {toAccount && ` → ${toAccount.name}`}
-                                </span>
-                                <span className="shrink-0">·</span>
-                              </>
-                            )}
-                            <span className="truncate">
-                              {tx.type === 'transfer' ? 'Transfer' : category?.name}
-                            </span>
-                            <span className="shrink-0">·</span>
-                            <span className="shrink-0">{tx.date}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <TransactionAmount tx={tx} />
-                      </div>
-                    </div>
-
-                    {tx.receiptItems && tx.receiptItems.length > 0 && (
-                      <div className="ml-12 p-3 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-black/[0.05] dark:border-white/[0.06] text-[11px] space-y-1">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7268] dark:text-[#8E9689] block">
-                          Itemized Receipt ({tx.receiptItems.length})
-                        </span>
-                        {tx.receiptItems.map((it, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between text-[#3E443C] dark:text-[#C8CFC4]"
+                      return (
+                        <div key={tx.id}>
+                          <button
+                            type="button"
+                            onClick={() => openTransactionModal(tx)}
+                            className="w-full text-left p-4 hover:bg-black/[0.015] dark:hover:bg-white/[0.02] transition block"
                           >
-                            <span className="truncate pr-2">
-                              {it.name} · {it.category}
-                            </span>
-                            <span className="font-mono font-semibold tabular-nums shrink-0">
-                              <HoldAmount amount={it.price} currency={tx.currency} interactive={false} />
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <TransactionIcon
+                                  categoryName={category?.name}
+                                  categoryIcon={category?.icon}
+                                  merchant={tx.merchant}
+                                  type={tx.type}
+                                  isCharity={tx.isCharity}
+                                  hasReceipt={Boolean(tx.receiptItems?.length)}
+                                />
+
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] truncate">
+                                      {tx.merchant || category?.name || 'Transaction'}
+                                    </span>
+                                    {tx.isCharity && (
+                                      <Heart className="w-3 h-3 text-[#6B7268] dark:text-[#C8EC45] shrink-0" />
+                                    )}
+                                  </div>
+
+                                  <div className="text-[11px] text-[#6B7268] dark:text-[#8E9689] flex items-center gap-1.5 mt-0.5 truncate">
+                                    {bankInfo && account && (
+                                      <>
+                                        <span className="inline-flex items-center gap-1.5 text-[#111315] dark:text-[#D5DCD0] font-medium shrink-0">
+                                          <BankLogo bank={bankInfo} size="xs" />
+                                          {account.name}
+                                          {account.isArchived ? ' (Archived)' : ''}
+                                          {toAccount && ` → ${toAccount.name}`}
+                                        </span>
+                                        <span className="shrink-0">·</span>
+                                      </>
+                                    )}
+                                    <span className="truncate">
+                                      {tx.type === 'transfer' ? 'Transfer' : category?.name}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <TransactionAmount tx={tx} />
+                              </div>
+                            </div>
+                          </button>
+
+                          {itemCount > 0 && (
+                            <div className="pl-16 pr-4 pb-3 -mt-1">
+                              <button
+                                type="button"
+                                onClick={() => toggleReceipt(tx.id)}
+                                aria-expanded={isExpanded}
+                                aria-controls={`receipt-${tx.id}`}
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#5E655A] dark:text-[#A4AC9E] hover:text-[#111315] dark:hover:text-white transition"
+                              >
+                                <ChevronDown
+                                  className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                />
+                                {isExpanded ? 'Hide' : 'Show'} {itemCount} receipt {itemCount === 1 ? 'item' : 'items'}
+                              </button>
+
+                              {isExpanded && (
+                                <div
+                                  id={`receipt-${tx.id}`}
+                                  className="mt-2 p-3 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-black/[0.05] dark:border-white/[0.06] text-[11px] space-y-1"
+                                >
+                                  {tx.receiptItems!.map((it) => (
+                                    <div
+                                      key={it.id}
+                                      className="flex items-center justify-between text-[#3E443C] dark:text-[#C8CFC4]"
+                                    >
+                                      <span className="truncate pr-2">
+                                        {it.name} · {it.category}
+                                      </span>
+                                      <span className="font-mono font-semibold tabular-nums shrink-0">
+                                        <HoldAmount amount={it.price} currency={tx.currency} interactive={false} />
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
             </div>
           )}
         </div>

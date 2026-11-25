@@ -41,6 +41,39 @@ export function getDateRangeBounds(
   return { start: localDateString(shiftLocalDate(today, 6)), end };
 }
 
+const SHORT_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * Human-friendly heading for a YYYY-MM-DD date: "Today", "Yesterday",
+ * "Mon, Nov 24", or "Mon, Nov 24, 2025" when not in the current year.
+ */
+export function formatDayHeading(dateStr: string, today: Date = new Date()): string {
+  if (dateStr === localDateString(today)) return 'Today';
+  if (dateStr === localDateString(shiftLocalDate(today, 1))) return 'Yesterday';
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (!match) return dateStr || 'Unknown date';
+  const d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const base = `${SHORT_WEEKDAYS[d.getDay()]}, ${SHORT_MONTHS[d.getMonth()]} ${d.getDate()}`;
+  return d.getFullYear() === today.getFullYear() ? base : `${base}, ${d.getFullYear()}`;
+}
+
+/**
+ * Groups items by their `date` (YYYY-MM-DD), newest day first.
+ * Order within a day is preserved from the input.
+ */
+export function groupByDay<T extends { date: string }>(items: T[]): { date: string; items: T[] }[] {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const list = groups.get(item.date);
+    if (list) list.push(item);
+    else groups.set(item.date, [item]);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0))
+    .map(([date, list]) => ({ date, items: list }));
+}
+
 /**
  * Validates a strict YYYY-MM-DD calendar date string.
  */

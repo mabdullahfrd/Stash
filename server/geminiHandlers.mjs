@@ -8,6 +8,8 @@ import path from 'node:path';
 import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
+import { FirestoreRateLimiter } from './rateLimit.mjs';
 import {
   classifyGeminiApiError,
   normalizeBankScreenshotOutput,
@@ -19,7 +21,20 @@ import {
 } from './geminiValidation.mjs';
 
 const DEFAULT_FIREBASE_PROJECT_ID = 'gen-lang-client-0154914697';
-const perUserLimiter = new SlidingWindowRateLimiter(20, 60 * 60 * 1000);
+const SCAN_LIMIT_PER_HOUR = 20;
+const SCAN_WINDOW_MS = 60 * 60 * 1000;
+
+// Shared across all serverless instances via Firestore; falls back to this
+// instance's memory only if Firestore can't be reached.
+const perUserLimiter = new FirestoreRateLimiter({
+  getFirestore: () => {
+    getFirebaseAdminAuth(); // ensures the Admin app is initialized
+    return getFirestore(getApp());
+  },
+  fallback: new SlidingWindowRateLimiter(SCAN_LIMIT_PER_HOUR, SCAN_WINDOW_MS),
+  maxRequests: SCAN_LIMIT_PER_HOUR,
+  windowMs: SCAN_WINDOW_MS,
+});
 
 /**
  * @returns {string}
@@ -159,7 +174,7 @@ export async function handleScanReceipt(req, res) {
   const uid = await verifyAuthenticatedUser(req, res);
   if (!uid) return;
 
-  const rateCheck = perUserLimiter.check(uid);
+  const rateCheck = await perUserLimiter.check(uid);
   if (!rateCheck.allowed) {
     res.setHeader?.('Retry-After', String(rateCheck.retryAfterSeconds));
     return res.status(429).json({
@@ -283,7 +298,7 @@ export async function handleParseBankScreenshot(req, res) {
   const uid = await verifyAuthenticatedUser(req, res);
   if (!uid) return;
 
-  const rateCheck = perUserLimiter.check(uid);
+  const rateCheck = await perUserLimiter.check(uid);
   if (!rateCheck.allowed) {
     res.setHeader?.('Retry-After', String(rateCheck.retryAfterSeconds));
     return res.status(429).json({
@@ -307,12 +322,12 @@ export async function handleParseBankScreenshot(req, res) {
   }
 
   try {
-    const prompt = `Analyze this mobile banking or payment history screenshot (for example Toss / 토스 / 토스뱅크 / Hana Bank / 하나은행 / 1Q).
+    const prompt = `Analyze this mobile banking or payment history screenshot (for example Toss / í† ìŠ¤ / í† ìŠ¤ë±…í¬ / Hana Bank / í•˜ë‚˜ì€í–‰ / 1Q).
 Extract EVERY transaction row shown in the screenshot.
 Rules:
 - Identify the bank app shown: set bankHint to "toss" for Toss/Toss Bank, "hana" for Hana Bank/1Q, or "other".
-- Amounts in banking apps may look like "-4,500원" or "4,500원 출금" (expense) or "+120,000원" or "입금" (income). Return "amount" as a positive number and set "type" to "expense" or "income".
-- Parse dates into YYYY-MM-DD (assume year ${today.slice(0, 4)} if month/day like "11.14" or "11월 14일" is shown; fallback to ${today} if no date appears).
+- Amounts in banking apps may look like "-4,500ì›" or "4,500ì› ì¶œê¸ˆ" (expense) or "+120,000ì›" or "ìž…ê¸ˆ" (income). Return "amount" as a positive number and set "type" to "expense" or "income".
+- Parse dates into YYYY-MM-DD (assume year ${today.slice(0, 4)} if month/day like "11.14" or "11ì›” 14ì¼" is shown; fallback to ${today} if no date appears).
 - Assign "category" from:
   Expense: "Groceries (Eggs, Bread, Milk)", "Coffee", "Drinks & Beverages", "Ice Cream", "Treats & Snacks", "Dining & Takeout", "Study & Uni Gear", "Transit & Metro", "Travel & Flights", "Bills & Rent", "Subscriptions", "Health", "Fitness & Sports", "Beauty & Personal Care", "Entertainment & Events", "Shopping", "Tech & Software", "Household & Laundry", "Gifts & Occasions", "Savings & Goals", "Charity & Giving", "Uncategorized".
   Income: "Work Placement & Salary", "Tutoring & Campus Job", "Allowance & Inflow", "Freelance & Side Gig", "Scholarship & Grants", "Interest & Dividends", "Refunds & Cashback", "Uncategorized".
