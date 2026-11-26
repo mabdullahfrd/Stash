@@ -133,7 +133,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           {/* Left Column: Interactive Visual Preview Stage */}
           <div className="lg:col-span-7">
-            <div className="rounded-[28px] bg-[#141617] text-[#F4F5F0] p-5 sm:p-7 border border-black/[0.08] dark:border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.12)] min-h-[340px] sm:min-h-[390px] flex flex-col justify-between overflow-hidden relative">
+            <div className="rounded-[28px] bg-[#141617] text-[#F4F5F0] p-5 sm:p-7 border border-black/[0.08] dark:border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.12)] min-h-[390px] flex flex-col justify-between overflow-hidden relative" data-onboarding-card>
               {activeSlide.id === 'banking' && (
                 <div
                   key="slide-banking"

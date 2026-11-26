@@ -666,7 +666,7 @@ export const ScannerView: React.FC = () => {
             <button
               type="button"
               onClick={() => setImportMode('bank')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`min-h-[40px] px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
                 importMode === 'bank'
                   ? 'bg-white dark:bg-[#1E221C] text-[#111315] dark:text-[#F4F5F0] shadow-xs'
                   : 'text-[#6B7268] dark:text-[#8E9689] hover:text-[#111315] dark:hover:text-white'
@@ -677,7 +677,7 @@ export const ScannerView: React.FC = () => {
             <button
               type="button"
               onClick={() => setImportMode('receipt')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`min-h-[40px] px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
                 importMode === 'receipt'
                   ? 'bg-white dark:bg-[#1E221C] text-[#111315] dark:text-[#F4F5F0] shadow-xs'
                   : 'text-[#6B7268] dark:text-[#8E9689] hover:text-[#111315] dark:hover:text-white'
@@ -789,7 +789,7 @@ export const ScannerView: React.FC = () => {
                         key={idx}
                         type="button"
                         onClick={() => loadSampleBankScreenshot(sample)}
-                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-[#111315] dark:text-[#F4F5F0] text-xs font-medium hover:border-black/20 dark:hover:border-white/20 transition"
+                        className="min-h-[40px] px-3 py-1.5 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-[#111315] dark:text-[#F4F5F0] text-xs font-medium hover:border-black/20 dark:hover:border-white/20 transition"
                       >
                         {sample.label}
                       </button>
@@ -841,7 +841,7 @@ export const ScannerView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => openAccountModal()}
-                      className="px-3 py-1.5 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold shrink-0"
+                      className="min-h-[40px] px-3 py-1.5 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold shrink-0"
                     >
                       Link Bank
                     </button>
@@ -900,13 +900,19 @@ export const ScannerView: React.FC = () => {
                               type="button"
                               onClick={() => toggleEntrySelected(entry.id)}
                               aria-label={`Include ${entry.merchant}`}
-                              className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition ${
-                                entry.selected
-                                  ? 'bg-[#141617] dark:bg-[#C8EC45] border-[#141617] dark:border-[#C8EC45] text-white dark:text-[#111315]'
-                                  : 'bg-white dark:bg-[#161915] border-black/20 dark:border-white/20 text-transparent'
-                              }`}
+                              aria-pressed={entry.selected}
+                              // 44px touch area around a 20px visual box; negative margin keeps the layout unchanged
+                              className="w-11 h-11 -m-3 flex items-center justify-center shrink-0"
                             >
-                              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                              <span
+                                className={`w-5 h-5 rounded-md border flex items-center justify-center transition ${
+                                  entry.selected
+                                    ? 'bg-[#141617] dark:bg-[#C8EC45] border-[#141617] dark:border-[#C8EC45] text-white dark:text-[#111315]'
+                                    : 'bg-white dark:bg-[#161915] border-black/20 dark:border-white/20 text-transparent'
+                                }`}
+                              >
+                                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                              </span>
                             </button>
 
                             <div className="min-w-0 flex-1">
@@ -941,7 +947,7 @@ export const ScannerView: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => removeParsedEntry(entry.id)}
-                              className="text-[#8E9689] hover:text-rose-500 p-1 transition"
+                              className="w-11 h-11 -m-3 flex items-center justify-center shrink-0 text-[#8E9689] hover:text-rose-500 transition"
                               aria-label={`Remove ${entry.merchant}`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -956,7 +962,7 @@ export const ScannerView: React.FC = () => {
                             onChange={(e) =>
                               updateEntryType(entry.id, e.target.value as 'expense' | 'income')
                             }
-                            className="px-2 py-1 rounded-md bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[11px] font-medium text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                            className="px-2 py-1 min-h-[36px] rounded-md bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[11px] font-medium text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
                           >
                             <option value="expense">Expense</option>
                             <option value="income">Income</option>
@@ -966,7 +972,7 @@ export const ScannerView: React.FC = () => {
                             aria-label={`Category for ${entry.merchant}`}
                             value={entry.categoryId}
                             onChange={(e) => updateEntryCategory(entry.id, e.target.value)}
-                            className="flex-1 min-w-0 px-2 py-1 rounded-md bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[11px] font-medium text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                            className="flex-1 min-w-0 px-2 py-1 min-h-[36px] rounded-md bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[11px] font-medium text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
                           >
                             {categories
                               .filter((c) => c.type === entry.type)
@@ -1111,7 +1117,7 @@ export const ScannerView: React.FC = () => {
                         key={idx}
                         type="button"
                         onClick={() => loadSampleReceipt(sample)}
-                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-[#111315] dark:text-[#F4F5F0] text-xs font-medium hover:border-black/20 dark:hover:border-white/20 transition"
+                        className="min-h-[40px] px-3 py-1.5 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-[#111315] dark:text-[#F4F5F0] text-xs font-medium hover:border-black/20 dark:hover:border-white/20 transition"
                       >
                         {sample.name}
                       </button>
@@ -1183,7 +1189,7 @@ export const ScannerView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => openAccountModal()}
-                      className="px-3 py-1.5 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold shrink-0"
+                      className="min-h-[40px] px-3 py-1.5 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold shrink-0"
                     >
                       Link Bank
                     </button>
@@ -1275,7 +1281,7 @@ export const ScannerView: React.FC = () => {
                         id="new-item-category"
                         value={newItemCategory}
                         onChange={(e) => setNewItemCategory(e.target.value)}
-                        className="px-2 py-1 rounded-md bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[11px] font-medium text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                        className="px-2 py-1 min-h-[36px] rounded-md bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[11px] font-medium text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
                       >
                         {categories
                           .filter((c) => c.type === 'expense')
@@ -1313,7 +1319,7 @@ export const ScannerView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleRemoveReceiptItem(it.id)}
-                          className="text-[#8E9689] hover:text-rose-500 p-1 transition"
+                          className="w-11 h-11 -m-3 flex items-center justify-center shrink-0 text-[#8E9689] hover:text-rose-500 transition"
                           aria-label={`Remove ${it.name}`}
                         >
                           <Trash2 className="w-3.5 h-3.5" />

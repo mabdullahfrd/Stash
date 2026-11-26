@@ -30,9 +30,21 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
+// Demo seed dates are generated relative to the day the app loads, so a demo record
+// stored on an earlier day differs only in these fields. Ignore them when deciding
+// whether the guest changed a demo record.
+const SEED_DATE_FIELDS = new Set(['date', 'createdAt', 'updatedAt', 'dueDate', 'targetDate']);
+
+function withoutSeedDates(record: object): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(record).filter(([k]) => !SEED_DATE_FIELDS.has(k)));
+}
+
 function isUntouchedSeed<T extends { id: string }>(record: T, seedById: Map<string, T>): boolean {
   const seed = seedById.get(record.id);
-  return seed !== undefined && stableStringify(seed) === stableStringify(record);
+  return (
+    seed !== undefined &&
+    stableStringify(withoutSeedDates(seed)) === stableStringify(withoutSeedDates(record))
+  );
 }
 
 /**

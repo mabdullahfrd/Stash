@@ -4,6 +4,20 @@
  */
 
 import { Account, Category, CharityPledge, SavingsGoal, Transaction } from '../types/finance';
+import { localDateString, shiftLocalDate } from '../utils/dates';
+
+/**
+ * Demo dates are relative to today so the demo always looks current
+ * (recent spending in the 7-day chart, upcoming goal and pledge deadlines).
+ * Positive = days ago, negative = days from now.
+ */
+const demoToday = new Date();
+function demoDate(daysAgo: number): string {
+  return localDateString(shiftLocalDate(demoToday, daysAgo));
+}
+function demoTimestamp(daysAgo: number, time: string): string {
+  return `${demoDate(daysAgo)}T${time}:00`;
+}
 
 export const INITIAL_ACCOUNTS: Account[] = [
   {
@@ -75,11 +89,11 @@ export const INITIAL_SAVINGS_GOALS: SavingsGoal[] = [
     targetAmount: 1000000,
     currency: 'KRW',
     savedAmount: 350000,
-    targetDate: '2026-12-31',
+    targetDate: demoDate(-35),
     notes: '3-month essential living reserve in KRW.',
     status: 'partially_saved',
-    createdAt: '2026-10-20',
-    updatedAt: '2026-11-02',
+    createdAt: demoDate(40),
+    updatedAt: demoDate(6),
   },
   {
     id: 'goal-tech-fund',
@@ -88,11 +102,11 @@ export const INITIAL_SAVINGS_GOALS: SavingsGoal[] = [
     targetAmount: 1500000,
     currency: 'KRW',
     savedAmount: 500000,
-    targetDate: '2027-02-15',
+    targetDate: demoDate(-80),
     notes: 'Upgrade reserve for next semester projects.',
     status: 'partially_saved',
-    createdAt: '2026-10-28',
-    updatedAt: '2026-11-04',
+    createdAt: demoDate(30),
+    updatedAt: demoDate(4),
   },
 ];
 
@@ -104,11 +118,11 @@ export const INITIAL_CHARITY_PLEDGES: CharityPledge[] = [
     pledgedAmount: 250000,
     currency: 'KRW',
     fulfilledAmount: 100000,
-    dueDate: '2026-11-25',
+    dueDate: demoDate(-10),
     notes: '2.5% calculated on net liquid savings and placement earnings in Korea.',
     status: 'partially_fulfilled',
-    createdAt: '2026-10-25',
-    updatedAt: '2026-11-01',
+    createdAt: demoDate(35),
+    updatedAt: demoDate(2),
   },
 ];
 
@@ -119,13 +133,13 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     type: 'income',
     amount: 2100000,
     currency: 'KRW',
-    date: '2026-11-01',
+    date: demoDate(20),
     categoryId: 'cat-placement',
     accountId: 'acc-krw-hana',
     merchant: 'Engineering Placement Stipend',
     notes: 'Monthly university work placement stipend',
-    createdAt: '2026-11-01T09:00:00Z',
-    updatedAt: '2026-11-01T09:00:00Z',
+    createdAt: demoTimestamp(20, '09:00'),
+    updatedAt: demoTimestamp(20, '09:00'),
   },
   // Itemized Groceries paid via Toss Bank
   {
@@ -133,7 +147,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     type: 'expense',
     amount: 18000,
     currency: 'KRW',
-    date: '2026-11-02',
+    date: demoDate(5),
     categoryId: 'cat-groceries',
     accountId: 'acc-krw-toss',
     merchant: 'Emart Everyday (이마트 에브리데이)',
@@ -144,8 +158,8 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
       { id: 'item-3', name: 'Cold Brew Oat Latte (콜드브루 라떼)', price: 5500, category: 'Coffee' },
       { id: 'item-4', name: 'Haagen-Dazs Vanilla Cup (하겐다즈)', price: 4200, category: 'Ice Cream' },
     ],
-    createdAt: '2026-11-02T14:15:00Z',
-    updatedAt: '2026-11-02T14:15:00Z',
+    createdAt: demoTimestamp(5, '14:15'),
+    updatedAt: demoTimestamp(5, '14:15'),
   },
   // Coffee run via Toss Bank
   {
@@ -153,13 +167,13 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     type: 'expense',
     amount: 4500,
     currency: 'KRW',
-    date: '2026-11-03',
+    date: demoDate(3),
     categoryId: 'cat-coffee',
     accountId: 'acc-krw-toss',
     merchant: 'Mega Coffee Vanilla Latte (메가커피)',
     notes: 'Vanilla Latte study break',
-    createdAt: '2026-11-03T10:30:00Z',
-    updatedAt: '2026-11-03T10:30:00Z',
+    createdAt: demoTimestamp(3, '10:30'),
+    updatedAt: demoTimestamp(3, '10:30'),
   },
   // Ice cream via Toss Bank
   {
@@ -167,13 +181,13 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     type: 'expense',
     amount: 5200,
     currency: 'KRW',
-    date: '2026-11-03',
+    date: demoDate(1),
     categoryId: 'cat-icecream',
     accountId: 'acc-krw-toss',
     merchant: 'Baskin Robbins (배스킨라빈스)',
     notes: 'Single regular scoop',
-    createdAt: '2026-11-03T19:45:00Z',
-    updatedAt: '2026-11-03T19:45:00Z',
+    createdAt: demoTimestamp(1, '19:45'),
+    updatedAt: demoTimestamp(1, '19:45'),
   },
   // Tutoring income into Hana Bank
   {
@@ -181,13 +195,13 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     type: 'income',
     amount: 120000,
     currency: 'KRW',
-    date: '2026-11-03',
+    date: demoDate(4),
     categoryId: 'cat-tutoring',
     accountId: 'acc-krw-hana',
     merchant: 'Peer Tutoring (2 hrs)',
     notes: 'Math & engineering tutoring session',
-    createdAt: '2026-11-03T17:00:00Z',
-    updatedAt: '2026-11-03T17:00:00Z',
+    createdAt: demoTimestamp(4, '17:00'),
+    updatedAt: demoTimestamp(4, '17:00'),
   },
   // Charity distribution from Hana Bank
   {
@@ -195,15 +209,15 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     type: 'expense',
     amount: 100000,
     currency: 'KRW',
-    date: '2026-11-04',
+    date: demoDate(2),
     categoryId: 'cat-charity',
     accountId: 'acc-krw-hana',
     merchant: 'Student Zakat Tranche',
     notes: 'Student Zakat fulfillment tranche',
     isCharity: true,
     charityPledgeId: 'pledge-zakat-korea',
-    createdAt: '2026-11-04T11:00:00Z',
-    updatedAt: '2026-11-04T11:00:00Z',
+    createdAt: demoTimestamp(2, '11:00'),
+    updatedAt: demoTimestamp(2, '11:00'),
   },
 ];
 

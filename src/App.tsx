@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FinanceProvider, useFinanceUI } from './context/FinanceContext';
 import { PWAUpdateProvider } from './context/PWAUpdateContext';
@@ -51,6 +51,12 @@ const ScreenFallback: React.FC = () => (
 const AppContent: React.FC = () => {
   const { isAuthenticated, loading } = useAuth();
   const { activeTab, isSettingsModalOpen, closeSettingsModal } = useFinanceUI();
+
+  // Each tab is its own screen: start it at the top instead of inheriting the
+  // previous tab's scroll position.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [activeTab]);
   const [preAuthStage, setPreAuthStage] = useState<PreAuthStage>(() =>
     resolveInitialPreAuthStage(
       typeof window !== 'undefined' ? window.location.search : ''

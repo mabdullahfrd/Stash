@@ -101,7 +101,7 @@ export const ActivityView: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={exportTransactionsCSV}
-              className="w-9 h-9 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-[#4B5248] dark:text-[#B4BCB0] hover:text-[#111315] dark:hover:text-white transition flex items-center justify-center"
+              className="w-10 h-10 rounded-xl bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] text-[#4B5248] dark:text-[#B4BCB0] hover:text-[#111315] dark:hover:text-white transition flex items-center justify-center"
               title="Export CSV"
               aria-label="Export CSV"
             >
@@ -110,7 +110,7 @@ export const ActivityView: React.FC = () => {
 
             <button
               onClick={() => openTransactionModal()}
-              className="h-9 px-3.5 rounded-xl bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
+              className="h-10 px-3.5 rounded-xl bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>New Entry</span>
@@ -135,7 +135,7 @@ export const ActivityView: React.FC = () => {
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
           <button
             onClick={() => setSelectedBankFilter(null)}
-            className={`px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap border transition ${
+            className={`min-h-[36px] px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap border transition ${
               !selectedBankFilter
                 ? 'bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] border-transparent'
                 : 'bg-white dark:bg-[#161915] text-[#5E655A] dark:text-[#A4AC9E] border-black/[0.07] dark:border-white/[0.08]'
@@ -152,7 +152,7 @@ export const ActivityView: React.FC = () => {
               <button
                 key={acc.id}
                 onClick={() => setSelectedBankFilter(isSelected ? null : acc.id)}
-                className={`px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap border transition flex items-center gap-2 ${
+                className={`min-h-[36px] px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap border transition flex items-center gap-2 ${
                   isSelected
                     ? 'bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] border-transparent'
                     : 'bg-white dark:bg-[#161915] text-[#5E655A] dark:text-[#A4AC9E] border-black/[0.07] dark:border-white/[0.08]'
@@ -169,7 +169,7 @@ export const ActivityView: React.FC = () => {
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-[11px]">
           <button
             onClick={() => setSelectedCategory('all')}
-            className={`px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition ${
+            className={`min-h-[36px] px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition ${
               selectedCategory === 'all'
                 ? 'bg-black/[0.08] dark:bg-white/[0.12] text-[#111315] dark:text-white'
                 : 'text-[#6B7268] dark:text-[#8E9689] hover:text-[#111315] dark:hover:text-white'
@@ -180,7 +180,7 @@ export const ActivityView: React.FC = () => {
 
           <button
             onClick={() => setSelectedCategory('income')}
-            className={`px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition ${
+            className={`min-h-[36px] px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition ${
               selectedCategory === 'income'
                 ? 'bg-black/[0.08] dark:bg-white/[0.12] text-[#111315] dark:text-white'
                 : 'text-[#6B7268] dark:text-[#8E9689] hover:text-[#111315] dark:hover:text-white'
@@ -191,7 +191,7 @@ export const ActivityView: React.FC = () => {
 
           <button
             onClick={() => setSelectedCategory('charity')}
-            className={`px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition inline-flex items-center gap-1 ${
+            className={`min-h-[36px] px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition inline-flex items-center gap-1 ${
               selectedCategory === 'charity'
                 ? 'bg-black/[0.08] dark:bg-white/[0.12] text-[#111315] dark:text-white'
                 : 'text-[#6B7268] dark:text-[#8E9689] hover:text-[#111315] dark:hover:text-white'
@@ -207,7 +207,7 @@ export const ActivityView: React.FC = () => {
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition ${
+                className={`min-h-[36px] px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition ${
                   selectedCategory === cat.id
                     ? 'bg-black/[0.08] dark:bg-white/[0.12] text-[#111315] dark:text-white font-semibold'
                     : 'text-[#6B7268] dark:text-[#8E9689] hover:text-[#111315] dark:hover:text-white'
@@ -320,7 +320,7 @@ export const ActivityView: React.FC = () => {
                                 onClick={() => toggleReceipt(tx.id)}
                                 aria-expanded={isExpanded}
                                 aria-controls={`receipt-${tx.id}`}
-                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#5E655A] dark:text-[#A4AC9E] hover:text-[#111315] dark:hover:text-white transition"
+                                className="min-h-[36px] inline-flex items-center gap-1 text-[11px] font-semibold text-[#5E655A] dark:text-[#A4AC9E] hover:text-[#111315] dark:hover:text-white transition"
                               >
                                 <ChevronDown
                                   className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}

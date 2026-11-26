@@ -29,6 +29,16 @@ test('buildGuestImportPlan returns null for missing or untouched demo data', () 
   assert.equal(buildGuestImportPlan(roundTripped, SEED), null);
 });
 
+test('buildGuestImportPlan ignores demo records saved on an earlier day (dates are relative)', () => {
+  const storedYesterday: FinanceSnapshot = {
+    ...SEED,
+    transactions: SEED.transactions.map((t) => ({ ...t, date: '2020-01-01', createdAt: 'x', updatedAt: 'y' })),
+    savingsGoals: SEED.savingsGoals.map((g) => ({ ...g, targetDate: '2020-02-02' })),
+    charityPledges: SEED.charityPledges.map((p) => ({ ...p, dueDate: '2020-03-03' })),
+  };
+  assert.equal(buildGuestImportPlan(storedYesterday, SEED), null);
+});
+
 test('buildGuestImportPlan keeps user entries and the demo account they reference', () => {
   const demoAccount = INITIAL_ACCOUNTS[0];
   const userTx: Transaction = {

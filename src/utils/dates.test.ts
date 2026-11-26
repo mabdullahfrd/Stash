@@ -6,6 +6,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  describeDeadline,
+  formatShortDate,
   formatDayHeading,
   getDateRangeBounds,
   groupByDay,
@@ -83,4 +85,22 @@ test('isValidDateString validates real YYYY-MM-DD dates and rejects invalid cale
   assert.equal(isValidDateString('2026-13-01'), false);
   assert.equal(isValidDateString('11/20/2026'), false);
   assert.equal(isValidDateString(null), false);
+});
+
+test('formatShortDate shows month and day, adding the year only outside the current year', () => {
+  const today = new Date(2026, 10, 27);
+  assert.equal(formatShortDate('2026-12-31', today), 'Dec 31');
+  assert.equal(formatShortDate('2027-02-15', today), 'Feb 15, 2027');
+  assert.equal(formatShortDate('bad', today), 'bad');
+});
+
+test('describeDeadline flags overdue and upcoming deadlines', () => {
+  const today = new Date(2026, 10, 27, 15, 30); // time of day must not matter
+  assert.deepEqual(describeDeadline('2026-11-25', today), { label: 'Overdue by 2 days', tone: 'overdue' });
+  assert.deepEqual(describeDeadline('2026-11-26', today), { label: 'Overdue by 1 day', tone: 'overdue' });
+  assert.deepEqual(describeDeadline('2026-11-27', today), { label: 'Due today', tone: 'soon' });
+  assert.deepEqual(describeDeadline('2026-11-28', today), { label: '1 day left', tone: 'soon' });
+  assert.deepEqual(describeDeadline('2026-12-11', today), { label: '14 days left', tone: 'soon' });
+  assert.deepEqual(describeDeadline('2026-12-31', today), { label: 'Dec 31', tone: 'later' });
+  assert.equal(describeDeadline('', today), null);
 });

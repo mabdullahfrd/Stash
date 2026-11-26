@@ -16,7 +16,7 @@ export const MinimalHeader: React.FC = () => {
   const { theme, setTheme, openSettingsModal, openHoldConvertModal } = useFinanceUI();
 
   const { user, isGuest } = useAuth();
-  const displayName = user?.displayName || (isGuest ? 'Abdullah' : 'Personal');
+  const displayName = user?.displayName || (isGuest ? 'Demo' : 'Personal');
 
   return (
     <header className="w-full px-4 sm:px-6 pt-4 pb-2 flex items-center justify-between gap-3">

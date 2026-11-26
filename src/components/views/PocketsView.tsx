@@ -23,6 +23,7 @@ import { MinimalHeader } from '../common/MinimalHeader';
 import { BankLogo } from '../common/BankLogo';
 import { TransactionIcon } from '../common/TransactionIcon';
 import { TransactionAmount } from '../common/TransactionAmount';
+import { DeadlineLabel } from '../common/DeadlineLabel';
 import { formatCurrency, convertCurrency } from '../../utils/currencies';
 import { findBankPreset } from '../../utils/koreanBanks';
 import { AnalyticsTimeRange, computeItemTypeAnalytics } from '../../utils/itemAnalytics';
@@ -175,7 +176,7 @@ export const PocketsView: React.FC = () => {
           <div className="inline-flex p-1 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.05]">
             <button
               onClick={() => setViewMode('overview')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`min-h-[40px] px-4 py-1.5 rounded-lg text-xs font-semibold transition ${
                 viewMode === 'overview'
                   ? 'bg-white dark:bg-[#1E221C] text-[#111315] dark:text-[#F4F5F0] shadow-xs'
                   : 'text-[#6B7268] dark:text-[#8E9689] hover:text-[#111315] dark:hover:text-white'
@@ -185,7 +186,7 @@ export const PocketsView: React.FC = () => {
             </button>
             <button
               onClick={() => setViewMode('analytics')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`min-h-[40px] px-4 py-1.5 rounded-lg text-xs font-semibold transition ${
                 viewMode === 'analytics'
                   ? 'bg-white dark:bg-[#1E221C] text-[#111315] dark:text-[#F4F5F0] shadow-xs'
                   : 'text-[#6B7268] dark:text-[#8E9689] hover:text-[#111315] dark:hover:text-white'
@@ -318,7 +319,7 @@ export const PocketsView: React.FC = () => {
                   {activeAccounts.length > 0 && (
                     <button
                       onClick={() => openAccountModal()}
-                      className="px-3 py-1.5 rounded-xl bg-[#F4F5F0] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] transition flex items-center gap-1 whitespace-nowrap shrink-0"
+                      className="min-h-[40px] px-3 py-1.5 rounded-xl bg-[#F4F5F0] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] transition flex items-center gap-1 whitespace-nowrap shrink-0"
                     >
                       <Plus className="w-3.5 h-3.5 shrink-0" />
                       <span className="whitespace-nowrap">Link Bank</span>
@@ -405,7 +406,7 @@ export const PocketsView: React.FC = () => {
                             onClick={() => openTransactionModal({ type: 'expense', accountId: acc.id })}
                             title={`Add entry to ${acc.name}`}
                             aria-label={`Add entry to ${acc.name}`}
-                            className="w-7 h-7 rounded-lg bg-white dark:bg-white/[0.06] border border-black/[0.07] dark:border-white/[0.08] flex items-center justify-center text-[#111315] dark:text-[#F4F5F0] hover:bg-[#C8EC45] hover:text-[#111315] hover:border-transparent transition shrink-0"
+                            className="w-10 h-10 rounded-xl bg-white dark:bg-white/[0.06] border border-black/[0.07] dark:border-white/[0.08] flex items-center justify-center text-[#111315] dark:text-[#F4F5F0] hover:bg-[#C8EC45] hover:text-[#111315] hover:border-transparent transition shrink-0"
                           >
                             <Plus className="w-3.5 h-3.5" />
                           </button>
@@ -564,7 +565,7 @@ export const PocketsView: React.FC = () => {
                   </h2>
                   <button
                     onClick={() => setActiveTab('activity')}
-                    className="text-xs font-semibold text-[#5E655A] dark:text-[#A4AC9E] hover:text-[#111315] dark:hover:text-white transition"
+                    className="min-h-[40px] px-2 -mr-2 text-xs font-semibold text-[#5E655A] dark:text-[#A4AC9E] hover:text-[#111315] dark:hover:text-white transition"
                   >
                     See all
                   </button>
@@ -668,7 +669,7 @@ export const PocketsView: React.FC = () => {
                       setNewGoalError('');
                       setIsNewGoalOpen((v) => !v);
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-[#F4F5F0] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] transition flex items-center gap-1 shrink-0"
+                    className="min-h-[40px] px-3 py-1.5 rounded-xl bg-[#F4F5F0] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] transition flex items-center gap-1 shrink-0"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>New Goal</span>
@@ -830,7 +831,7 @@ export const PocketsView: React.FC = () => {
                               </div>
                               <span className="text-[10px] text-[#6B7268] dark:text-[#8E9689]">
                                 {goal.category}
-                                {goal.targetDate ? ` · Target ${goal.targetDate}` : ''}
+                                <DeadlineLabel date={goal.targetDate} prefix="Target" isComplete={isCompleted} />
                               </span>
                             </div>
 
@@ -845,7 +846,7 @@ export const PocketsView: React.FC = () => {
                                   setDepositNotes('');
                                   setDepositError('');
                                 }}
-                                className="px-2.5 py-1 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold"
+                                className="min-h-[36px] px-3 py-1 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold"
                               >
                                 {isCompleted ? 'Add More' : 'Add Savings'}
                               </button>
@@ -853,7 +854,7 @@ export const PocketsView: React.FC = () => {
                                 type="button"
                                 onClick={() => setGoalPendingDelete(goal)}
                                 aria-label={`Delete ${goal.title}`}
-                                className="p-1 text-[#8E9689] hover:text-rose-500 transition"
+                                className="w-9 h-9 ml-1 -mr-1.5 rounded-lg flex items-center justify-center text-[#8E9689] hover:text-rose-500 transition"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1003,7 +1004,7 @@ export const PocketsView: React.FC = () => {
                       setNewPledgeError('');
                       setIsNewPledgeOpen((v) => !v);
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-[#F4F5F0] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] transition flex items-center gap-1 shrink-0"
+                    className="min-h-[40px] px-3 py-1.5 rounded-xl bg-[#F4F5F0] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] transition flex items-center gap-1 shrink-0"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>New Pledge</span>
@@ -1164,7 +1165,7 @@ export const PocketsView: React.FC = () => {
                               </div>
                               <span className="text-[10px] text-[#6B7268] dark:text-[#8E9689]">
                                 {pledge.cause}
-                                {pledge.dueDate ? ` · Due ${pledge.dueDate}` : ''}
+                                <DeadlineLabel date={pledge.dueDate} prefix="Due" isComplete={isFulfilled} />
                               </span>
                             </div>
 
@@ -1179,7 +1180,7 @@ export const PocketsView: React.FC = () => {
                                     setFulfillNotes('');
                                     setFulfillError('');
                                   }}
-                                  className="px-2.5 py-1 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold"
+                                  className="min-h-[36px] px-3 py-1 rounded-lg bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold"
                                 >
                                   Fulfill
                                 </button>
@@ -1188,7 +1189,7 @@ export const PocketsView: React.FC = () => {
                                 type="button"
                                 onClick={() => setPledgePendingDelete(pledge)}
                                 aria-label={`Delete ${pledge.title}`}
-                                className="p-1 text-[#8E9689] hover:text-rose-500 transition"
+                                className="w-9 h-9 ml-1 -mr-1.5 rounded-lg flex items-center justify-center text-[#8E9689] hover:text-rose-500 transition"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1309,7 +1310,7 @@ export const PocketsView: React.FC = () => {
                     key={t.id}
                     type="button"
                     onClick={() => setTimeRange(t.id)}
-                    className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition ${
+                    className={`min-h-[36px] px-3 py-1 rounded-lg text-[11px] font-semibold transition ${
                       timeRange === t.id
                         ? 'bg-white dark:bg-[#1E221C] text-[#111315] dark:text-[#F4F5F0] shadow-xs'
                         : 'text-[#6B7268] dark:text-[#8E9689] hover:text-[#111315] dark:hover:text-white'
@@ -1324,7 +1325,7 @@ export const PocketsView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setAnalyticsBankFilter(null)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition ${
+                  className={`min-h-[36px] px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition ${
                     analyticsBankFilter === null
                       ? 'bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] border-transparent'
                       : 'bg-white dark:bg-[#161915] border-black/[0.07] dark:border-white/[0.08] text-[#5E655A] dark:text-[#A4AC9E]'
@@ -1340,7 +1341,7 @@ export const PocketsView: React.FC = () => {
                       key={acc.id}
                       type="button"
                       onClick={() => setAnalyticsBankFilter(active ? null : acc.id)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition flex items-center gap-1.5 ${
+                      className={`min-h-[36px] px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition flex items-center gap-1.5 ${
                         active
                           ? 'bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] border-transparent'
                           : 'bg-white dark:bg-[#161915] border-black/[0.07] dark:border-white/[0.08] text-[#5E655A] dark:text-[#A4AC9E]'
@@ -1409,7 +1410,7 @@ export const PocketsView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setSelectedItemCategoryFilter(null)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
+                    className={`min-h-[36px] px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
                       selectedItemCategoryFilter === null
                         ? 'bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315]'
                         : 'bg-[#F4F5F0] dark:bg-white/[0.06] text-[#5E655A] dark:text-[#A4AC9E]'
@@ -1426,7 +1427,7 @@ export const PocketsView: React.FC = () => {
                           selectedItemCategoryFilter === cat.categoryId ? null : cat.categoryId
                         )
                       }
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
+                      className={`min-h-[36px] px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
                         selectedItemCategoryFilter === cat.categoryId
                           ? 'bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315]'
                           : 'bg-[#F4F5F0] dark:bg-white/[0.06] text-[#5E655A] dark:text-[#A4AC9E]'
