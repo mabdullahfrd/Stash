@@ -23,6 +23,8 @@ import { getFallbackCategory, inferCategoryForItem } from '../../utils/autoCateg
 import { localDateString } from '../../utils/dates';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { ModalShell } from '../common/ModalShell';
+import { pickQuickCategories } from '../../utils/quickCategories';
+import { cleanAmountText } from '../common/InlineAmountInput';
 
 const MAX_TRANSACTION_AMOUNT = 1_000_000_000_000;
 
@@ -34,6 +36,7 @@ export const TransactionModal: React.FC = () => {
     accounts,
     accountBalances,
     categories,
+    transactions,
     activeCurrency,
     rates,
   } = useFinanceData();
@@ -44,6 +47,8 @@ export const TransactionModal: React.FC = () => {
     initialTransactionType,
     initialAccountId,
     openAccountModal,
+    showUndoToast,
+    dismissIncomeCharity,
   } = useFinanceUI();
   const titleId = useId();
 
@@ -63,6 +68,7 @@ export const TransactionModal: React.FC = () => {
   const [autoMatchedLabel, setAutoMatchedLabel] = useState<string | null>(null);
   const [error, setError] = useState<string>('');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false);
+  const [showAllCategories, setShowAllCategories] = useState<boolean>(false);
 
   const accountsRef = useRef(accounts);
   accountsRef.current = accounts;
@@ -131,6 +137,7 @@ export const TransactionModal: React.FC = () => {
     }
     setError('');
     setIsDeleteConfirmOpen(false);
+    setShowAllCategories(false);
   }, [isTransactionModalOpen, editingTransactionId, initialTransactionType, initialAccountId]);
 
   if (!isTransactionModalOpen) return null;
@@ -204,7 +211,13 @@ export const TransactionModal: React.FC = () => {
     if (editingTransaction) {
       editTransaction(editingTransaction.id, payload);
     } else {
-      addTransaction(payload);
+      // The entry appears immediately; the id resolves once any cloud write settles.
+      const newIdPromise = addTransaction(payload);
+      const label = type === 'income' ? 'Income' : type === 'transfer' ? 'Transfer' : 'Expense';
+      showUndoToast(`${label} saved`, async () => {
+        if (type === 'income') dismissIncomeCharity(); // drop the 10% charity prompt for the undone income
+        await deleteTransaction(await newIdPromise);
+      });
     }
 
     closeTransactionModal();
@@ -223,6 +236,21 @@ export const TransactionModal: React.FC = () => {
     if (type === 'expense') return c.type === 'expense';
     return true;
   });
+  const shownCategories = showAllCategories
+    ? availableCategories
+    : pickQuickCategories(
+        availableCategories,
+        transactions.filter((t) => t.type === type),
+        categoryId
+      );
+  const hiddenCategoryCount = availableCategories.length - shownCategories.length;
+
+  // KRW / PKR have no decimals, so show the plain number pad; others get a decimal point.
+  const amountAllowsDecimals = (CURRENCY_REGISTRY[currency]?.decimals ?? 2) > 0;
+  const amountInputMode = amountAllowsDecimals ? 'decimal' : 'numeric';
+  const destAllowsDecimals = destAccount
+    ? (CURRENCY_REGISTRY[destAccount.currency]?.decimals ?? 2) > 0
+    : true;
 
   return (
     <>
@@ -338,11 +366,13 @@ export const TransactionModal: React.FC = () => {
                 {CURRENCY_REGISTRY[currency]?.symbol || '₩'}
               </span>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode={amountInputMode}
+                enterKeyHint="next"
+                autoComplete="off"
                 aria-label="Transaction amount"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => setAmount(cleanAmountText(e.target.value, amountAllowsDecimals))}
                 placeholder="0"
                 autoFocus
                 className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] font-mono text-2xl font-bold tabular-nums focus:outline-none focus:border-[#141617] dark:focus:border-[#C8EC45]"
@@ -420,7 +450,7 @@ export const TransactionModal: React.FC = () => {
                 )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                {availableCategories.map((cat) => {
+                {shownCategories.map((cat) => {
                   const isSelected = categoryId === cat.id;
                   const CatIcon = resolveTransactionIcon({
                     categoryName: cat.name,
@@ -450,6 +480,16 @@ export const TransactionModal: React.FC = () => {
                   );
                 })}
               </div>
+              {(hiddenCategoryCount > 0 || showAllCategories) && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllCategories((v) => !v)}
+                  aria-expanded={showAllCategories}
+                  className="min-h-[36px] w-full rounded-xl text-[11px] font-semibold text-[#5E655A] dark:text-[#A4AC9E] hover:text-[#111315] dark:hover:text-white hover:bg-black/[0.03] dark:hover:bg-white/[0.04] transition"
+                >
+                  {showAllCategories ? 'Show fewer categories' : `More categories (${hiddenCategoryCount})`}
+                </button>
+              )}
             </div>
           )}
 
@@ -570,8 +610,9 @@ export const TransactionModal: React.FC = () => {
                     </span>
                     <input
                       id="tx-to-amount"
-                      type="number"
-                      step="any"
+                      type="text"
+                      inputMode={destAllowsDecimals ? 'decimal' : 'numeric'}
+                      autoComplete="off"
                       value={
                         toAmountEdited
                           ? toAmount
@@ -581,7 +622,7 @@ export const TransactionModal: React.FC = () => {
                       }
                       onChange={(e) => {
                         setToAmountEdited(true);
-                        setToAmount(e.target.value);
+                        setToAmount(cleanAmountText(e.target.value, destAllowsDecimals));
                       }}
                       placeholder={defaultConvertedToAmount > 0 ? defaultConvertedToAmount.toString() : '0'}
                       className="w-full pl-8 pr-3 py-2.5 rounded-xl bg-[#F4F5F0] dark:bg-[#0D0F0C] border border-black/[0.08] dark:border-white/[0.1] text-[#111315] dark:text-[#F4F5F0] font-mono font-semibold text-xs tabular-nums focus:outline-none focus:border-[#141617] dark:focus:border-[#C8EC45]"
@@ -609,8 +650,8 @@ export const TransactionModal: React.FC = () => {
             </div>
           )}
 
-          {/* Actions */}
-          <div className="pt-2 flex items-center gap-2.5">
+          {/* Actions: pinned to the bottom of the sheet so Save is always reachable */}
+          <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-6 -mb-5 sm:-mb-6 px-5 sm:px-6 pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-6 bg-white dark:bg-[#161915] border-t border-black/[0.06] dark:border-white/[0.07] flex items-center gap-2.5">
             {editingTransaction && (
               <button
                 type="button"

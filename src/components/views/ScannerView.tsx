@@ -23,6 +23,7 @@ import { CURRENCY_REGISTRY, formatCurrency, roundCurrencyAmount } from '../../ut
 import { MinimalHeader } from '../common/MinimalHeader';
 import { BankLogo } from '../common/BankLogo';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { InlineAmountInput } from '../common/InlineAmountInput';
 import { ReceiptCameraModal } from '../modals/ReceiptCameraModal';
 import { findBankPreset } from '../../utils/koreanBanks';
 import { getFallbackCategory, inferCategoryForItem } from '../../utils/autoCategorize';
@@ -392,13 +393,21 @@ export const ScannerView: React.FC = () => {
     setParsedEntries((prev) => prev.filter((entry) => entry.id !== id));
   };
 
+  // Let people fix AI misreads (name or amount) before anything is saved.
+  const updateEntryField = (id: string, patch: { merchant?: string; amount?: number }) => {
+    setParsedEntries((prev) => prev.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
+  };
+  const isEntryValid = (entry: { merchant: string; amount: number }) =>
+    entry.merchant.trim().length > 0 && Number.isFinite(entry.amount) && entry.amount > 0;
+
   const selectedEntries = parsedEntries.filter((e) => e.selected);
+  const invalidSelectedCount = selectedEntries.filter((e) => !isEntryValid(e)).length;
   const selectedNetExpense = selectedEntries
     .filter((e) => e.type === 'expense')
     .reduce((sum, e) => sum + e.amount, 0);
 
   const handleImportSelectedEntries = async () => {
-    if (selectedEntries.length === 0) return;
+    if (selectedEntries.length === 0 || invalidSelectedCount > 0) return;
     if (!selectedAccount) {
       openAccountModal();
       return;
@@ -411,7 +420,7 @@ export const ScannerView: React.FC = () => {
       date: entry.date,
       categoryId: entry.categoryId,
       accountId: selectedAccount.id,
-      merchant: entry.merchant,
+      merchant: entry.merchant.trim(),
       notes: entry.notes || `Imported from ${detectedBankLabel} screenshot`,
       isCharity: entry.isCharity,
     }));
@@ -917,9 +926,18 @@ export const ScannerView: React.FC = () => {
 
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-semibold text-xs text-[#111315] dark:text-[#F4F5F0] truncate">
-                                  {entry.merchant}
-                                </span>
+                                <input
+                                  type="text"
+                                  value={entry.merchant}
+                                  onChange={(e) => updateEntryField(entry.id, { merchant: e.target.value })}
+                                  aria-label="Merchant name"
+                                  aria-invalid={!entry.merchant.trim() || undefined}
+                                  placeholder="Merchant name"
+                                  title={entry.merchant}
+                                  className={`w-full min-w-0 min-h-[32px] -ml-1 px-1 rounded-md bg-transparent border font-semibold text-xs text-[#111315] dark:text-[#F4F5F0] hover:border-black/[0.08] dark:hover:border-white/[0.1] focus:outline-none focus:border-[#141617] dark:focus:border-[#C8EC45] focus:bg-white dark:focus:bg-[#161915] ${
+                                    entry.merchant.trim() ? 'border-transparent' : 'border-rose-400 dark:border-rose-500'
+                                  }`}
+                                />
                                 {entry.isDuplicate && (
                                   <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 shrink-0">
                                     Already imported
@@ -934,16 +952,6 @@ export const ScannerView: React.FC = () => {
                           </div>
 
                           <div className="flex items-center gap-2 shrink-0">
-                            <span
-                              className={`font-mono font-bold text-xs tabular-nums ${
-                                entry.type === 'income'
-                                  ? 'text-emerald-700 dark:text-[#C8EC45]'
-                                  : 'text-[#111315] dark:text-[#F4F5F0]'
-                              }`}
-                            >
-                              {entry.type === 'income' ? '+' : '-'}
-                              {formatCurrency(entry.amount, selectedAccount?.currency || activeCurrency)}
-                            </span>
                             <button
                               type="button"
                               onClick={() => removeParsedEntry(entry.id)}
@@ -955,7 +963,15 @@ export const ScannerView: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between gap-2 pl-7">
+                        <div className="flex flex-wrap items-center gap-2 pl-7">
+                          <InlineAmountInput
+                            value={entry.amount}
+                            currency={selectedAccount?.currency || activeCurrency}
+                            sign={entry.type === 'income' ? '+' : '-'}
+                            invalid={!(entry.amount > 0)}
+                            ariaLabel={`Amount for ${entry.merchant || 'entry'}`}
+                            onChange={(amount) => updateEntryField(entry.id, { amount })}
+                          />
                           <select
                             aria-label={`Type for ${entry.merchant}`}
                             value={entry.type}
@@ -972,7 +988,7 @@ export const ScannerView: React.FC = () => {
                             aria-label={`Category for ${entry.merchant}`}
                             value={entry.categoryId}
                             onChange={(e) => updateEntryCategory(entry.id, e.target.value)}
-                            className="flex-1 min-w-0 px-2 py-1 min-h-[36px] rounded-md bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[11px] font-medium text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
+                            className="basis-full sm:basis-0 flex-1 min-w-0 px-2 py-1 min-h-[36px] rounded-md bg-white dark:bg-[#161915] border border-black/[0.08] dark:border-white/[0.1] text-[11px] font-medium text-[#111315] dark:text-[#F4F5F0] focus:outline-none"
                           >
                             {categories
                               .filter((c) => c.type === entry.type)
@@ -993,10 +1009,19 @@ export const ScannerView: React.FC = () => {
               <button
                 type="button"
                 onClick={handleImportSelectedEntries}
-                disabled={selectedEntries.length === 0 || !selectedAccount || batchSuccessCount !== null}
+                disabled={
+                  selectedEntries.length === 0 ||
+                  !selectedAccount ||
+                  batchSuccessCount !== null ||
+                  invalidSelectedCount > 0
+                }
                 className="w-full py-3.5 px-4 rounded-xl bg-[#C8EC45] hover:bg-[#B8DE35] text-[#111315] font-semibold text-xs transition flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                {batchSuccessCount !== null ? (
+                {invalidSelectedCount > 0 && batchSuccessCount === null ? (
+                  <span>
+                    Fix {invalidSelectedCount} {invalidSelectedCount === 1 ? 'entry' : 'entries'} (name or amount missing)
+                  </span>
+                ) : batchSuccessCount !== null ? (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
                     <span>

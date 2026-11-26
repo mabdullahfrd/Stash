@@ -169,9 +169,10 @@ export interface FinanceDataContextType {
   };
 
   setActiveCurrency: (currency: CurrencyCode) => void;
+  /** Resolves with the new transaction's id once the (optional) cloud write settles. */
   addTransaction: (
     tx: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>
-  ) => Promise<void>;
+  ) => Promise<string>;
   addBatchTransactions: (
     txList: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>[]
   ) => Promise<number>;
@@ -588,6 +589,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
           setSyncError(`Failed to sync transaction: ${info.error}`);
         }
       }
+      return newTx.id;
     },
     [user, recordDailyActivity, addXp, markQuestCompleted, triggerIncomeCharityPrompt]
   );

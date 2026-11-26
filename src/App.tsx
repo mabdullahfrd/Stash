@@ -17,6 +17,7 @@ import { CurrencyHoldModal } from './components/modals/CurrencyHoldModal';
 import { AuthModal } from './components/modals/AuthModal';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { GuestImportDialog } from './components/modals/GuestImportDialog';
+import { UndoToast } from './components/common/UndoToast';
 import { PreAuthStage, resolveInitialPreAuthStage } from './utils/onboardingFlow';
 
 const AuthView = lazy(() =>
@@ -117,6 +118,7 @@ const AppContent: React.FC = () => {
         <AuthModal />
         <SettingsModal isOpen={isSettingsModalOpen} onClose={closeSettingsModal} />
         <GuestImportDialog />
+        <UndoToast />
       </div>
     </DeviceFrame>
   );

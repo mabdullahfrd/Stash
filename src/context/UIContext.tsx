@@ -9,6 +9,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
@@ -62,7 +63,20 @@ export interface UIContextType {
   isSettingsModalOpen: boolean;
   openSettingsModal: () => void;
   closeSettingsModal: () => void;
+
+  /** Short-lived "Saved · Undo" toast shown after creating an entry. */
+  undoToast: UndoToastData | null;
+  showUndoToast: (message: string, onUndo: () => void | Promise<void>) => void;
+  dismissUndoToast: () => void;
 }
+
+export interface UndoToastData {
+  key: number;
+  message: string;
+  onUndo: () => void | Promise<void>;
+}
+
+export const UNDO_TOAST_MS = 6000;
 
 const THEME_STORAGE_KEY = 'stash_krw_theme_v5';
 
@@ -94,6 +108,31 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [initialBankPresetId, setInitialBankPresetId] = useState<string | null>(null);
 
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+  const [undoToast, setUndoToast] = useState<UndoToastData | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dismissUndoToast = useCallback(() => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = null;
+    setUndoToast(null);
+  }, []);
+
+  const showUndoToast = useCallback(
+    (message: string, onUndo: () => void | Promise<void>) => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      setUndoToast({ key: Date.now(), message, onUndo });
+      undoTimerRef.current = setTimeout(() => {
+        undoTimerRef.current = null;
+        setUndoToast(null);
+      }, UNDO_TOAST_MS);
+    },
+    []
+  );
+
+  useEffect(() => () => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -200,6 +239,9 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       isSettingsModalOpen,
       openSettingsModal,
       closeSettingsModal,
+      undoToast,
+      showUndoToast,
+      dismissUndoToast,
     }),
     [
       theme,
@@ -227,6 +269,9 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       isSettingsModalOpen,
       openSettingsModal,
       closeSettingsModal,
+      undoToast,
+      showUndoToast,
+      dismissUndoToast,
     ]
   );
 
