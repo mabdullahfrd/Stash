@@ -322,12 +322,12 @@ export async function handleParseBankScreenshot(req, res) {
   }
 
   try {
-    const prompt = `Analyze this mobile banking or payment history screenshot (for example Toss / í† ìŠ¤ / í† ìŠ¤ë±…í¬ / Hana Bank / í•˜ë‚˜ì€í–‰ / 1Q).
+    const prompt = `Analyze this mobile banking or payment history screenshot (for example Toss / 토스 / 토스뱅크 / Hana Bank / 하나은행 / 1Q).
 Extract EVERY transaction row shown in the screenshot.
 Rules:
 - Identify the bank app shown: set bankHint to "toss" for Toss/Toss Bank, "hana" for Hana Bank/1Q, or "other".
-- Amounts in banking apps may look like "-4,500ì›" or "4,500ì› ì¶œê¸ˆ" (expense) or "+120,000ì›" or "ìž…ê¸ˆ" (income). Return "amount" as a positive number and set "type" to "expense" or "income".
-- Parse dates into YYYY-MM-DD (assume year ${today.slice(0, 4)} if month/day like "11.14" or "11ì›” 14ì¼" is shown; fallback to ${today} if no date appears).
+- Amounts in banking apps may look like "-4,500원" or "4,500원 출금" (expense) or "+120,000원" or "입금" (income). Return "amount" as a positive number and set "type" to "expense" or "income".
+- Parse dates into YYYY-MM-DD (assume year ${today.slice(0, 4)} if month/day like "11.14" or "11월 14일" is shown; fallback to ${today} if no date appears).
 - Assign "category" from:
   Expense: "Groceries (Eggs, Bread, Milk)", "Coffee", "Drinks & Beverages", "Ice Cream", "Treats & Snacks", "Dining & Takeout", "Study & Uni Gear", "Transit & Metro", "Travel & Flights", "Bills & Rent", "Subscriptions", "Health", "Fitness & Sports", "Beauty & Personal Care", "Entertainment & Events", "Shopping", "Tech & Software", "Household & Laundry", "Gifts & Occasions", "Savings & Goals", "Charity & Giving", "Uncategorized".
   Income: "Work Placement & Salary", "Tutoring & Campus Job", "Allowance & Inflow", "Freelance & Side Gig", "Scholarship & Grants", "Interest & Dividends", "Refunds & Cashback", "Uncategorized".
