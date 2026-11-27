@@ -29,7 +29,9 @@ const SCAN_WINDOW_MS = 60 * 60 * 1000;
 const perUserLimiter = new FirestoreRateLimiter({
   getFirestore: () => {
     getFirebaseAdminAuth(); // ensures the Admin app is initialized
-    return getFirestore(getApp());
+    // The app stores data in a named Firestore database, not "(default)".
+    const databaseId = resolveFirestoreDatabaseId();
+    return databaseId ? getFirestore(getApp(), databaseId) : getFirestore(getApp());
   },
   fallback: new SlidingWindowRateLimiter(SCAN_LIMIT_PER_HOUR, SCAN_WINDOW_MS),
   maxRequests: SCAN_LIMIT_PER_HOUR,
@@ -37,12 +39,11 @@ const perUserLimiter = new FirestoreRateLimiter({
 });
 
 /**
- * @returns {string}
+ * Reads a string field from firebase-applet-config.json (next to the server code or in cwd).
+ * @param {string} field
+ * @returns {string | null}
  */
-function resolveProjectId() {
-  if (process.env.FIREBASE_PROJECT_ID) {
-    return process.env.FIREBASE_PROJECT_ID;
-  }
+function readAppletConfigField(field) {
   /** @type {Array<URL | string>} */
   const candidatePaths = [];
   if (typeof import.meta !== 'undefined' && import.meta.url) {
@@ -54,15 +55,30 @@ function resolveProjectId() {
     try {
       if (fs.existsSync(configPath)) {
         const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        if (parsed && typeof parsed.projectId === 'string' && parsed.projectId) {
-          return parsed.projectId;
+        if (parsed && typeof parsed[field] === 'string' && parsed[field]) {
+          return parsed[field];
         }
       }
     } catch (err) {
-      console.error('Failed to read firebase-applet-config.json for projectId:', err);
+      console.error(`Failed to read firebase-applet-config.json for ${field}:`, err);
     }
   }
-  return DEFAULT_FIREBASE_PROJECT_ID;
+  return null;
+}
+
+/**
+ * @returns {string}
+ */
+function resolveProjectId() {
+  return process.env.FIREBASE_PROJECT_ID || readAppletConfigField('projectId') || DEFAULT_FIREBASE_PROJECT_ID;
+}
+
+/**
+ * Named Firestore database used by the app (same one the web client uses).
+ * @returns {string | null}
+ */
+function resolveFirestoreDatabaseId() {
+  return process.env.FIRESTORE_DATABASE_ID || readAppletConfigField('firestoreDatabaseId');
 }
 
 function getFirebaseAdminAuth() {
