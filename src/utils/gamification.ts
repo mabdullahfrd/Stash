@@ -28,6 +28,9 @@ export interface LevelInfo {
 
 export const DAILY_XP_CAP = 100;
 
+/** XP awarded for logging a single entry (and taken back if that entry is undone). */
+export const ENTRY_XP = 20;
+
 export const LEVELS = [
   { level: 1, title: 'Won Starter (초보자)', requiredXp: 0, badge: 'Lv.1' },
   { level: 2, title: 'Budget Novice (절약 학생)', requiredXp: 200, badge: 'Lv.2' },
@@ -200,6 +203,22 @@ export function applyDailyXpCap(
     nextDailyXpEarned: baseline + grantedXp,
     xpDate: todayDate,
   };
+}
+
+/**
+ * How much XP to take back when an action is undone (e.g. an entry deleted via Undo).
+ * Only XP earned today can be revoked, so this never removes more than was granted
+ * today and never exceeds the requested amount.
+ */
+export function computeXpRevocation(
+  dailyXpEarned: number,
+  lastXpDate: string | null,
+  requestedXp: number,
+  todayDate: string
+): { revokedXp: number; nextDailyXpEarned: number } {
+  const earnedToday = lastXpDate === todayDate ? Math.max(0, dailyXpEarned) : 0;
+  const revokedXp = Math.min(earnedToday, Math.max(0, Math.round(requestedXp)));
+  return { revokedXp, nextDailyXpEarned: earnedToday - revokedXp };
 }
 
 // Web Audio API Synthesizer for subtle audio feedback

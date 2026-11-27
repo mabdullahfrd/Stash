@@ -31,7 +31,9 @@ import {
   AlertCircle,
   UserX,
   RefreshCw,
+  MonitorSmartphone,
 } from 'lucide-react';
+import { CategoryManager } from '../common/CategoryManager';
 import { PWAInstallButton } from '../common/PWAInstallButton';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { ModalShell } from '../common/ModalShell';
@@ -55,7 +57,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     exportTransactionsCSV,
     importDataJSON,
   } = useFinanceData();
-  const { theme, setTheme } = useFinanceUI();
+  const { theme, themePreference, setThemePreference } = useFinanceUI();
   const { soundEffectsEnabled, setSoundEffectsEnabled } = useGamification();
 
   const { user, isOnline, openAuthModal, deleteAccountAndData } = useAuth();
@@ -254,38 +256,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             </div>
 
+            {/* Custom categories */}
+            <CategoryManager />
+
             {/* Appearance & Sound */}
             <div className="space-y-3">
               <div>
                 <span className="block text-[11px] font-semibold uppercase tracking-wider text-[#6B7268] dark:text-[#8E9689] mb-2">
                   Appearance
                 </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setTheme('light')}
-                    type="button"
-                    className={`py-2.5 px-4 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition ${
-                      theme === 'light'
-                        ? 'bg-[#141617] text-white border-[#141617]'
-                        : 'bg-[#F4F5F0] dark:bg-[#0D0F0C] border-black/[0.06] dark:border-white/[0.06] text-[#5E655A] dark:text-[#A4AC9E]'
-                    }`}
-                  >
-                    <Sun className="w-3.5 h-3.5" />
-                    Light
-                  </button>
-                  <button
-                    onClick={() => setTheme('dark')}
-                    type="button"
-                    className={`py-2.5 px-4 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition ${
-                      theme === 'dark'
-                        ? 'bg-[#C8EC45] text-[#111315] border-[#C8EC45]'
-                        : 'bg-[#F4F5F0] dark:bg-[#0D0F0C] border-black/[0.06] dark:border-white/[0.06] text-[#5E655A] dark:text-[#A4AC9E]'
-                    }`}
-                  >
-                    <Moon className="w-3.5 h-3.5" />
-                    Dark
-                  </button>
+                <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Appearance">
+                  {(
+                    [
+                      { id: 'light', label: 'Light', Icon: Sun },
+                      { id: 'dark', label: 'Dark', Icon: Moon },
+                      { id: 'system', label: 'System', Icon: MonitorSmartphone },
+                    ] as const
+                  ).map(({ id, label, Icon }) => {
+                    const active = themePreference === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setThemePreference(id)}
+                        className={`min-h-[40px] py-2.5 px-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
+                          active
+                            ? 'bg-[#141617] text-white border-[#141617] dark:bg-[#C8EC45] dark:text-[#111315] dark:border-[#C8EC45]'
+                            : 'bg-[#F4F5F0] dark:bg-[#0D0F0C] border-black/[0.06] dark:border-white/[0.06] text-[#5E655A] dark:text-[#A4AC9E]'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
+                {themePreference === 'system' && (
+                  <p className="mt-1.5 text-[10px] text-[#6B7268] dark:text-[#8E9689]">
+                    Following your device — currently {theme}.
+                  </p>
+                )}
               </div>
 
               <button

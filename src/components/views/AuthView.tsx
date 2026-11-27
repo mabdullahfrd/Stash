@@ -15,6 +15,7 @@ import {
   AlertCircle,
   CheckCircle2,
   RotateCcw,
+  PlayCircle,
 } from 'lucide-react';
 import { StashLogo } from '../common/StashLogo';
 
@@ -362,15 +363,26 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
             {/* Demo Mode Entry */}
             <div className="space-y-3">
+              <div className="flex items-center gap-3 text-[11px] text-[#8E9689]" aria-hidden="true">
+                <span className="h-px flex-1 bg-black/[0.08] dark:bg-white/[0.1]" />
+                not ready to sign up?
+                <span className="h-px flex-1 bg-black/[0.08] dark:bg-white/[0.1]" />
+              </div>
               <button
                 onClick={continueAsGuest}
                 type="button"
-                className="w-full min-h-[46px] py-3 px-4 rounded-xl bg-white dark:bg-[#161915] hover:bg-black/[0.02] dark:hover:bg-white/[0.04] text-[#111315] dark:text-[#F4F5F0] font-semibold text-xs border border-black/[0.08] dark:border-white/[0.1] transition flex items-center justify-center gap-2 whitespace-nowrap"
+                className="w-full min-h-[56px] py-3 px-4 rounded-2xl bg-[#C8EC45]/25 dark:bg-[#C8EC45]/10 hover:bg-[#C8EC45]/40 dark:hover:bg-[#C8EC45]/15 text-[#111315] dark:text-[#F4F5F0] border border-[#C8EC45]/70 dark:border-[#C8EC45]/40 transition flex items-center gap-3 text-left"
               >
-                <span>Explore Demo Mode</span>
-                <span className="text-[11px] font-normal text-[#6B7268] dark:text-[#8E9689]">
-                  · Local workspace
+                <span className="w-9 h-9 rounded-xl bg-[#C8EC45] text-[#111315] flex items-center justify-center shrink-0">
+                  <PlayCircle className="w-[18px] h-[18px]" />
                 </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold">Try Stash without an account</span>
+                  <span className="block text-[11px] text-[#5E655A] dark:text-[#A4AC9E]">
+                    Explore with sample data — sign up anytime to keep your entries
+                  </span>
+                </span>
+                <ArrowRight className="w-4 h-4 shrink-0" />
               </button>
 
               <p className="text-center text-[11px] text-[#8E9689]">

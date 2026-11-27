@@ -19,8 +19,10 @@ import {
   SavingsContributeResult,
 } from './FinanceDataContext';
 
+import { CustomizationProvider, useCustomization } from './CustomizationContext';
+
 export type { ImportBackupResult, PledgeFulfillResult, SavingsContributeResult };
-export { useFinanceUI, useGamification, useFinanceData };
+export { useFinanceUI, useGamification, useFinanceData, useCustomization };
 
 export type FinanceContextType = FinanceDataContextType &
   GamificationContextType &
@@ -32,7 +34,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({
   return (
     <UIProvider>
       <GamificationProvider>
-        <FinanceDataProvider>{children}</FinanceDataProvider>
+        <CustomizationProvider>
+          <FinanceDataProvider>{children}</FinanceDataProvider>
+        </CustomizationProvider>
       </GamificationProvider>
     </UIProvider>
   );

@@ -24,6 +24,8 @@ import { BankLogo } from '../common/BankLogo';
 import { TransactionIcon } from '../common/TransactionIcon';
 import { TransactionAmount } from '../common/TransactionAmount';
 import { DeadlineLabel } from '../common/DeadlineLabel';
+import { ProgressCard } from '../common/ProgressCard';
+import { BudgetsCard } from '../common/BudgetsCard';
 import { formatCurrency, convertCurrency } from '../../utils/currencies';
 import { findBankPreset } from '../../utils/koreanBanks';
 import { AnalyticsTimeRange, computeItemTypeAnalytics } from '../../utils/itemAnalytics';
@@ -497,6 +499,8 @@ export const PocketsView: React.FC = () => {
 
             {/* RIGHT COLUMN: Weekly Spending Chart + Recent Activity */}
             <div className="lg:col-span-5 space-y-5">
+              <ProgressCard />
+
               {/* 7-Day Spending Pace Card */}
               <div className="rounded-[24px] bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] p-5 space-y-4">
                 <div className="flex items-center justify-between">
@@ -556,6 +560,8 @@ export const PocketsView: React.FC = () => {
                   </p>
                 </div>
               </div>
+
+              <BudgetsCard />
 
               {/* Recent Activity Card */}
               <div className="rounded-[24px] bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] p-5 space-y-3">

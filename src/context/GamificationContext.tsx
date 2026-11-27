@@ -21,6 +21,7 @@ import {
 } from '../utils/storage';
 import {
   applyDailyXpCap,
+  computeXpRevocation,
   getLevelInfo,
   LevelInfo,
   Quest,
@@ -60,6 +61,8 @@ export interface GamificationContextType {
   soundEffectsEnabled: boolean;
   setSoundEffectsEnabled: (enabled: boolean) => void;
   addXp: (amount: number, reason?: string) => void;
+  /** Takes back XP (capped at what was earned today), e.g. when a new entry is undone. */
+  revokeXp: (amount: number) => void;
   recordDailyActivity: () => void;
   markQuestCompleted: (questId: string) => void;
   claimQuest: (questId: string) => void;
@@ -195,6 +198,22 @@ export const GamificationProvider: React.FC<{ children: React.ReactNode }> = ({
     [showXpNotice]
   );
 
+  const revokeXp = useCallback((amount: number) => {
+    const today = localDateString();
+    setDailyXpState((prevDaily) => {
+      const { revokedXp, nextDailyXpEarned } = computeXpRevocation(
+        prevDaily.earned,
+        prevDaily.date,
+        amount,
+        today
+      );
+      if (revokedXp > 0) {
+        setXp((prev) => Math.max(0, prev - revokedXp));
+      }
+      return { earned: nextDailyXpEarned, date: today };
+    });
+  }, []);
+
   const recordDailyActivity = useCallback(() => {
     const today = localDateString();
     setStreak((prevStreak) => {
@@ -253,6 +272,7 @@ export const GamificationProvider: React.FC<{ children: React.ReactNode }> = ({
       soundEffectsEnabled,
       setSoundEffectsEnabled,
       addXp,
+      revokeXp,
       recordDailyActivity,
       markQuestCompleted,
       claimQuest,
@@ -270,6 +290,7 @@ export const GamificationProvider: React.FC<{ children: React.ReactNode }> = ({
       soundEffectsEnabled,
       setSoundEffectsEnabled,
       addXp,
+      revokeXp,
       recordDailyActivity,
       markQuestCompleted,
       claimQuest,

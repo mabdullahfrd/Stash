@@ -23,6 +23,17 @@ export interface Category {
   icon: string;
   color: string;
   isCharity?: boolean;
+  /** Created by the user (synced via users/{uid}/categories); built-in categories omit this. */
+  isCustom?: boolean;
+}
+
+/** Monthly spending limit for one expense category (synced via users/{uid}/budgets/{categoryId}). */
+export interface CategoryBudget {
+  id: string; // same as categoryId (one budget per category)
+  categoryId: string;
+  amount: number;
+  currency: CurrencyCode;
+  updatedAt: string;
 }
 
 export interface Account {
@@ -100,5 +111,8 @@ export interface SavingsGoal {
 }
 
 export type ThemeMode = 'light' | 'dark';
+
+/** What the user picked; 'system' follows the device's light/dark setting. */
+export type ThemePreference = ThemeMode | 'system';
 
 export type StudentNavTab = 'pockets' | 'scanner' | 'activity';

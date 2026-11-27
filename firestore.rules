@@ -143,6 +143,31 @@ service cloud.firestore {
         && data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 64;
     }
 
+    function isValidCustomCategory(data, categoryId, userId) {
+      return data.keys().hasAll(['id', 'userId', 'name', 'type', 'icon', 'color', 'isCustom', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'userId', 'name', 'type', 'icon', 'color', 'isCustom', 'isCharity', 'updatedAt'])
+        && data.id is string && data.id == categoryId && data.id.matches('^cat-custom-[a-zA-Z0-9_\\-]+$')
+        && data.userId is string && data.userId == userId && data.userId == request.auth.uid
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 60
+        && data.type in ['income', 'expense']
+        && data.icon is string && data.icon.size() >= 1 && data.icon.size() <= 60
+        && data.color is string && data.color.size() >= 1 && data.color.size() <= 32
+        && data.isCustom == true
+        && (!('isCharity' in data) || data.isCharity is bool)
+        && data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 64;
+    }
+
+    function isValidBudget(data, budgetId, userId) {
+      return data.keys().hasAll(['id', 'userId', 'categoryId', 'amount', 'currency', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'userId', 'categoryId', 'amount', 'currency', 'updatedAt'])
+        && data.id is string && data.id == budgetId
+        && data.categoryId is string && data.categoryId == budgetId
+        && data.userId is string && data.userId == userId && data.userId == request.auth.uid
+        && data.amount is number && data.amount > 0 && data.amount <= 1000000000000
+        && isValidCurrency(data.currency)
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
     // Default deny all
     match /{document=**} {
       allow read, write: if false;
@@ -222,6 +247,26 @@ service cloud.firestore {
           && request.resource.data.userId == resource.data.userId
           && request.resource.data.createdAt == resource.data.createdAt;
         allow delete: if isOwner(userId) && isValidId(goalId);
+      }
+
+      // User-created categories (built-in categories live in the app, not here)
+      match /categories/{categoryId} {
+        allow get: if isOwner(userId) && isValidId(categoryId);
+        allow list: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && isValidId(categoryId)
+          && isValidCustomCategory(request.resource.data, categoryId, userId);
+        allow delete: if isOwner(userId) && isValidId(categoryId);
+      }
+
+      // Monthly budgets, one document per expense category (document id = category id)
+      match /budgets/{categoryId} {
+        allow get: if isOwner(userId) && isValidId(categoryId);
+        allow list: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && isValidId(categoryId)
+          && isValidBudget(request.resource.data, categoryId, userId);
+        allow delete: if isOwner(userId) && isValidId(categoryId);
       }
     }
   }

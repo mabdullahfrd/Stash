@@ -4,7 +4,15 @@
  */
 
 import { z } from 'zod';
-import { Account, Category, CharityPledge, CurrencyCode, SavingsGoal, Transaction } from '../types/finance';
+import {
+  Account,
+  Category,
+  CategoryBudget,
+  CharityPledge,
+  CurrencyCode,
+  SavingsGoal,
+  Transaction,
+} from '../types/finance';
 
 const CurrencyCodeSchema = z.enum(['USD', 'EUR', 'KRW', 'PKR']);
 
@@ -57,6 +65,15 @@ const CategorySchema = z.object({
   icon: z.string().min(1).max(60),
   color: z.string().min(1).max(32),
   isCharity: z.boolean().optional(),
+  isCustom: z.boolean().optional(),
+});
+
+const BudgetSchema = z.object({
+  id: z.string().min(1).max(128),
+  categoryId: z.string().min(1).max(128),
+  amount: z.number().finite().positive(),
+  currency: CurrencyCodeSchema,
+  updatedAt: z.string().max(64).default(''),
 });
 
 const CharityPledgeSchema = z.object({
@@ -93,6 +110,7 @@ export const BackupPayloadSchema = z.object({
   categories: z.array(CategorySchema).optional(),
   charityPledges: z.array(CharityPledgeSchema),
   savingsGoals: z.array(SavingsGoalSchema).default([]),
+  budgets: z.array(BudgetSchema).default([]),
   primaryCurrency: CurrencyCodeSchema.optional(),
 });
 
@@ -102,6 +120,7 @@ export interface ValidatedBackupData {
   categories?: Category[];
   charityPledges: CharityPledge[];
   savingsGoals?: SavingsGoal[];
+  budgets?: CategoryBudget[];
   primaryCurrency?: CurrencyCode;
 }
 

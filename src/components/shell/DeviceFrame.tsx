@@ -15,8 +15,11 @@ interface DeviceFrameProps {
 
 export const DeviceFrame: React.FC<DeviceFrameProps> = ({ children, footer }) => {
   const { xpFloatingNotice } = useGamification();
-  const { user, resendVerificationEmail, reloadUser } = useAuth();
+  const { user, isGuest, openAuthModal, resendVerificationEmail, reloadUser } = useAuth();
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  // Hidden for the rest of this visit only; it returns next time so demo users keep a path to sign up.
+  const [demoBarDismissed, setDemoBarDismissed] = useState(false);
+  const isDemo = !user && isGuest;
   const [verifyNoticeStatus, setVerifyNoticeStatus] = useState<string | null>(null);
 
   const isPasswordUser = Boolean(
@@ -87,6 +90,37 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({ children, footer }) =>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {isDemo && !demoBarDismissed && (
+        <div className="w-full max-w-[1040px] mx-auto px-4 sm:px-6 pt-3">
+          <div
+            role="status"
+            className="rounded-2xl bg-[#C8EC45]/25 dark:bg-[#C8EC45]/10 border border-[#C8EC45]/70 dark:border-[#C8EC45]/30 pl-3.5 pr-1.5 py-1.5 flex items-center justify-between gap-2 text-xs text-[#111315] dark:text-[#F4F5F0]"
+          >
+            <span className="min-w-0">
+              <span className="font-bold">Demo mode</span>
+              <span className="text-[#4B5248] dark:text-[#B4BCB0]"> · entries stay on this device</span>
+            </span>
+            <span className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={openAuthModal}
+                className="min-h-[36px] px-3 rounded-xl bg-[#141617] dark:bg-[#C8EC45] text-white dark:text-[#111315] text-[11px] font-semibold"
+              >
+                Sign up to save
+              </button>
+              <button
+                type="button"
+                onClick={() => setDemoBarDismissed(true)}
+                aria-label="Hide demo notice"
+                className="w-9 h-9 rounded-xl hover:bg-black/[0.05] dark:hover:bg-white/[0.08] flex items-center justify-center"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </span>
           </div>
         </div>
       )}

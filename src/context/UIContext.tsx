@@ -17,11 +17,16 @@ import {
   CurrencyCode,
   StudentNavTab,
   ThemeMode,
+  ThemePreference,
   Transaction,
   TransactionType,
 } from '../types/finance';
 import { getStorageItem, setStorageItem } from '../utils/storage';
-import { getSystemPrefersDark, resolveInitialTheme } from '../utils/theme';
+import {
+  getSystemPrefersDark,
+  parseThemePreference,
+  resolveThemeFromPreference,
+} from '../utils/theme';
 
 export interface IncomeCharityPromptData {
   incomeAmount: number;
@@ -31,8 +36,11 @@ export interface IncomeCharityPromptData {
 }
 
 export interface UIContextType {
+  /** The theme currently shown (resolved from the preference). */
   theme: ThemeMode;
   setTheme: (theme: ThemeMode) => void;
+  themePreference: ThemePreference;
+  setThemePreference: (pref: ThemePreference) => void;
   activeTab: StudentNavTab;
   setActiveTab: (tab: StudentNavTab) => void;
   selectedBankFilter: string | null;
@@ -83,9 +91,20 @@ const THEME_STORAGE_KEY = 'stash_krw_theme_v5';
 const UIContext = createContext<UIContextType | undefined>(undefined);
 
 export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setThemeState] = useState<ThemeMode>(() =>
-    resolveInitialTheme(getStorageItem(THEME_STORAGE_KEY), getSystemPrefersDark())
+  const [themePreference, setThemePreferenceState] = useState<ThemePreference>(() =>
+    parseThemePreference(getStorageItem(THEME_STORAGE_KEY))
   );
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() => getSystemPrefersDark());
+  const theme: ThemeMode = resolveThemeFromPreference(themePreference, systemPrefersDark);
+
+  // Follow the device's light/dark switch live while the preference is 'system'.
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e: MediaQueryListEvent) => setSystemPrefersDark(e.matches);
+    mql.addEventListener?.('change', onChange);
+    return () => mql.removeEventListener?.('change', onChange);
+  }, []);
   const [activeTab, setActiveTab] = useState<StudentNavTab>('pockets');
   const [selectedBankFilter, setSelectedBankFilter] = useState<string | null>(null);
 
@@ -142,10 +161,13 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   }, [theme]);
 
-  const setTheme = useCallback((t: ThemeMode) => {
-    setThemeState(t);
-    setStorageItem(THEME_STORAGE_KEY, t);
+  const setThemePreference = useCallback((pref: ThemePreference) => {
+    setThemePreferenceState(pref);
+    setStorageItem(THEME_STORAGE_KEY, pref);
   }, []);
+
+  /** Explicit light/dark choice (e.g. the header toggle); stops following the system. */
+  const setTheme = useCallback((t: ThemeMode) => setThemePreference(t), [setThemePreference]);
 
   const openHoldConvertModal = useCallback(
     (amount: number, sourceCurrency: CurrencyCode) => {
@@ -214,6 +236,8 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     () => ({
       theme,
       setTheme,
+      themePreference,
+      setThemePreference,
       activeTab,
       setActiveTab,
       selectedBankFilter,
@@ -246,6 +270,8 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     [
       theme,
       setTheme,
+      themePreference,
+      setThemePreference,
       activeTab,
       selectedBankFilter,
       holdConvertAmount,

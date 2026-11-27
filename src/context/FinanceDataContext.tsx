@@ -78,6 +78,9 @@ import {
   generateId,
 } from '../utils/storage';
 import { buildGuestImportPlan, GuestImportPlan } from '../utils/guestImport';
+import { ENTRY_XP } from '../utils/gamification';
+import { useCustomization } from './CustomizationContext';
+import { CUSTOM_CATEGORY_PREFIX, mergeCustomCategories } from '../utils/customization';
 
 export interface ImportBackupResult {
   ok: boolean;
@@ -274,10 +277,22 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
     return [];
   });
 
-  const [categories, setCategories] = useState<Category[]>(() => {
+  // Built-in categories (kept on this device) + the user's custom ones (cloud-synced).
+  const [baseCategories, setCategories] = useState<Category[]>(() => {
     const stored = getStorageJSON<Category[] | null>(DATA_STORAGE_KEYS.CATEGORIES, null);
     return mergeCategories(stored);
   });
+  const {
+    customCategories,
+    budgets,
+    importCustomizations,
+    readGuestCustomizations,
+    clearGuestCustomizations,
+  } = useCustomization();
+  const categories = useMemo(
+    () => mergeCustomCategories(baseCategories, customCategories),
+    [baseCategories, customCategories]
+  );
 
   const [charityPledges, setCharityPledges] = useState<CharityPledge[]>(() => {
     if (!user && isGuest) {
@@ -505,8 +520,9 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [transactions, user, isGuest]);
 
   useEffect(() => {
-    setStorageJSON(DATA_STORAGE_KEYS.CATEGORIES, categories);
-  }, [categories]);
+    // Only the built-in list lives here; custom categories are stored by CustomizationContext.
+    setStorageJSON(DATA_STORAGE_KEYS.CATEGORIES, baseCategories);
+  }, [baseCategories]);
 
   useEffect(() => {
     if (!user && isGuest) {
@@ -562,7 +578,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
 
       setTransactions((prev) => [newTx, ...prev]);
       recordDailyActivity();
-      addXp(20, txData.type === 'income' ? 'Income logged' : 'Expense logged');
+      addXp(ENTRY_XP, txData.type === 'income' ? 'Income logged' : 'Expense logged');
       markQuestCompleted('quest-daily-expense');
 
       if (txData.type === 'income' && txData.amount > 0) {
@@ -1237,9 +1253,10 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       categories,
       charityPledges,
       savingsGoals,
+      budgets,
       exportDate: new Date().toISOString(),
       primaryCurrency: activeCurrency,
-      version: '3.1.0',
+      version: '3.2.0',
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: 'application/json',
@@ -1250,7 +1267,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
     a.download = `Stash_Finance_${localDateString()}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [accounts, transactions, categories, charityPledges, savingsGoals, activeCurrency]);
+  }, [accounts, transactions, categories, charityPledges, savingsGoals, budgets, activeCurrency]);
 
   const exportTransactionsCSV = useCallback(() => {
     const csvContent = buildTransactionsCsv(transactions, categories, accounts);
@@ -1276,14 +1293,20 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
         categories: nextCats,
         charityPledges: nextPledges,
         savingsGoals: nextGoals = [],
+        budgets: nextBudgets = [],
         primaryCurrency,
       } = parsed.data;
 
       setAccounts(nextAccs);
       setTransactions(nextTxs);
       if (nextCats) {
-        setCategories(mergeCategories(nextCats));
+        // Built-in categories stay on the device; custom ones (and budgets) go to the synced store.
+        setCategories(mergeCategories(nextCats.filter((c) => !c.id.startsWith(CUSTOM_CATEGORY_PREFIX))));
       }
+      await importCustomizations(
+        (nextCats ?? []).filter((c) => c.id.startsWith(CUSTOM_CATEGORY_PREFIX)),
+        nextBudgets
+      );
       setCharityPledges(nextPledges);
       setSavingsGoals(nextGoals);
       if (primaryCurrency) {
@@ -1344,14 +1367,15 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
         },
       };
     },
-    [user, setActiveCurrency, setSelectedBankFilter]
+    [user, setActiveCurrency, setSelectedBankFilter, importCustomizations]
   );
 
   const clearGuestDeviceData = useCallback(() => {
     for (const key of GUEST_DATA_KEYS) {
       removeStorageItem(DATA_STORAGE_KEYS[key]);
     }
-  }, []);
+    clearGuestCustomizations();
+  }, [clearGuestCustomizations]);
 
   const dismissGuestImport = useCallback(() => {
     clearGuestDeviceData();
@@ -1388,10 +1412,14 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({
       return { ok: false, error: `Import failed: ${info.error}` };
     }
 
+    // Custom categories (needed by imported entries) and budgets made in Demo Mode come along too.
+    const guestCustom = readGuestCustomizations();
+    await importCustomizations(guestCustom.categories, guestCustom.budgets);
+
     clearGuestDeviceData();
     setGuestImportPlan(null);
     return { ok: true };
-  }, [user, guestImportPlan, clearGuestDeviceData]);
+  }, [user, guestImportPlan, clearGuestDeviceData, readGuestCustomizations, importCustomizations]);
 
   const value = useMemo<FinanceDataContextType>(
     () => ({

@@ -4,7 +4,8 @@
  */
 
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { useFinanceData, useFinanceUI } from '../../context/FinanceContext';
+import { useCustomization, useFinanceData, useFinanceUI, useGamification } from '../../context/FinanceContext';
+import { computeBudgetProgress } from '../../utils/customization';
 import {
   X,
   Trash2,
@@ -25,6 +26,7 @@ import { ConfirmDialog } from '../common/ConfirmDialog';
 import { ModalShell } from '../common/ModalShell';
 import { pickQuickCategories } from '../../utils/quickCategories';
 import { cleanAmountText } from '../common/InlineAmountInput';
+import { ENTRY_XP } from '../../utils/gamification';
 
 const MAX_TRANSACTION_AMOUNT = 1_000_000_000_000;
 
@@ -40,6 +42,8 @@ export const TransactionModal: React.FC = () => {
     activeCurrency,
     rates,
   } = useFinanceData();
+  const { revokeXp } = useGamification();
+  const { budgets } = useCustomization();
   const {
     isTransactionModalOpen,
     closeTransactionModal,
@@ -216,6 +220,7 @@ export const TransactionModal: React.FC = () => {
       const label = type === 'income' ? 'Income' : type === 'transfer' ? 'Transfer' : 'Expense';
       showUndoToast(`${label} saved`, async () => {
         if (type === 'income') dismissIncomeCharity(); // drop the 10% charity prompt for the undone income
+        revokeXp(ENTRY_XP); // take back the XP addTransaction awarded, so save+undo can't farm XP
         await deleteTransaction(await newIdPromise);
       });
     }
@@ -244,6 +249,34 @@ export const TransactionModal: React.FC = () => {
         categoryId
       );
   const hiddenCategoryCount = availableCategories.length - shownCategories.length;
+
+  // Budget hint for the chosen expense category (this month, excluding the entry being edited).
+  const budgetForCategory =
+    type === 'expense' ? budgets.find((b) => b.categoryId === categoryId) : undefined;
+  const budgetHint = (() => {
+    if (!budgetForCategory) return null;
+    const [row] = computeBudgetProgress(
+      [budgetForCategory],
+      transactions.filter((t) => t.id !== editingTransaction?.id),
+      categories,
+      rates,
+      new Date(),
+      accounts
+    );
+    const name = row.category?.name ?? 'This category';
+    const entered = parseFloat(amount);
+    const countsThisMonth = (date || localDateString()).slice(0, 7) === localDateString().slice(0, 7);
+    const thisEntry =
+      Number.isFinite(entered) && entered > 0 && countsThisMonth
+        ? convertCurrency(entered, currency, budgetForCategory.currency, rates)
+        : 0;
+    const leftAfter = budgetForCategory.amount - row.spent - thisEntry;
+    const used = `${name} budget: ${formatCurrency(row.spent, budgetForCategory.currency)} of ${formatCurrency(budgetForCategory.amount, budgetForCategory.currency)} used`;
+    if (thisEntry === 0) return { text: `${used} this month.`, overAfter: row.remaining < 0 };
+    return leftAfter < 0
+      ? { text: `${used} — this puts you ${formatCurrency(-leftAfter, budgetForCategory.currency)} over.`, overAfter: true }
+      : { text: `${used} — ${formatCurrency(leftAfter, budgetForCategory.currency)} left after this.`, overAfter: false };
+  })();
 
   // KRW / PKR have no decimals, so show the plain number pad; others get a decimal point.
   const amountAllowsDecimals = (CURRENCY_REGISTRY[currency]?.decimals ?? 2) > 0;
@@ -489,6 +522,15 @@ export const TransactionModal: React.FC = () => {
                 >
                   {showAllCategories ? 'Show fewer categories' : `More categories (${hiddenCategoryCount})`}
                 </button>
+              )}
+              {budgetHint && (
+                <p
+                  className={`text-[11px] font-medium px-1 ${
+                    budgetHint.overAfter ? 'text-rose-600 dark:text-rose-400' : 'text-[#5E655A] dark:text-[#A4AC9E]'
+                  }`}
+                >
+                  {budgetHint.text}
+                </p>
               )}
             </div>
           )}

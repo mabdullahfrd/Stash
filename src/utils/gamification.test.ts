@@ -7,6 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyDailyXpCap,
+  computeXpRevocation,
   createDefaultQuests,
   DEFAULT_QUESTS,
   getLevelInfo,
@@ -14,6 +15,14 @@ import {
   updateDailyStreak,
 } from './gamification';
 import { findBankPreset } from './koreanBanks';
+
+test('computeXpRevocation only takes back XP earned today, up to the requested amount', () => {
+  assert.deepEqual(computeXpRevocation(60, '2026-11-27', 20, '2026-11-27'), { revokedXp: 20, nextDailyXpEarned: 40 });
+  // Capped day: only 10 left to take back
+  assert.deepEqual(computeXpRevocation(10, '2026-11-27', 20, '2026-11-27'), { revokedXp: 10, nextDailyXpEarned: 0 });
+  // Nothing earned today (new day) -> nothing revoked
+  assert.deepEqual(computeXpRevocation(80, '2026-11-26', 20, '2026-11-27'), { revokedXp: 0, nextDailyXpEarned: 0 });
+});
 
 test('Level calculations progress through levels properly', () => {
   const lv1 = getLevelInfo(50);
