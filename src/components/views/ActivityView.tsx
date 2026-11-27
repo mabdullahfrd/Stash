@@ -245,7 +245,7 @@ export const ActivityView: React.FC = () => {
             <div className="space-y-4">
               {dayGroups.map((group) => (
                 <section key={group.date} aria-label={formatDayHeading(group.date)}>
-                  <h2 className="px-1 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#6B7268] dark:text-[#8E9689]">
+                  <h2 className="px-1 pb-2 text-[13px] font-semibold text-[#4B5248] dark:text-[#B4BCB0]">
                     {formatDayHeading(group.date)}
                   </h2>
                   <div className="rounded-[24px] bg-white dark:bg-[#161915] border border-black/[0.07] dark:border-white/[0.08] divide-y divide-black/[0.05] dark:divide-white/[0.06] overflow-hidden">
@@ -280,7 +280,7 @@ export const ActivityView: React.FC = () => {
 
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] truncate">
+                                    <span className="text-sm font-semibold leading-snug text-[#111315] dark:text-[#F4F5F0] line-clamp-2 break-words break-keep">
                                       {tx.merchant || category?.name || 'Transaction'}
                                     </span>
                                     {tx.isCharity && (
@@ -288,7 +288,7 @@ export const ActivityView: React.FC = () => {
                                     )}
                                   </div>
 
-                                  <div className="text-[11px] text-[#6B7268] dark:text-[#8E9689] flex items-center gap-1.5 mt-0.5 truncate">
+                                  <div className="text-xs text-[#6B7268] dark:text-[#8E9689] flex items-center gap-1.5 mt-0.5 truncate">
                                     {bankInfo && account && (
                                       <>
                                         <span className="inline-flex items-center gap-1.5 text-[#111315] dark:text-[#D5DCD0] font-medium shrink-0">
@@ -308,7 +308,7 @@ export const ActivityView: React.FC = () => {
                               </div>
 
                               <div className="text-right shrink-0">
-                                <TransactionAmount tx={tx} />
+                                <TransactionAmount tx={tx} size="md" />
                               </div>
                             </div>
                           </button>

@@ -13,7 +13,7 @@ import { HoldAmount } from './HoldAmount';
  * - expense  → "-"
  * - transfer → neutral, no sign (moving money between your own pockets is not spending)
  */
-export const TransactionAmount: React.FC<{ tx: Transaction }> = ({ tx }) => {
+export const TransactionAmount: React.FC<{ tx: Transaction; size?: 'sm' | 'md' }> = ({ tx, size = 'sm' }) => {
   const isIncome = tx.type === 'income';
   const isTransfer = tx.type === 'transfer';
 
@@ -24,7 +24,7 @@ export const TransactionAmount: React.FC<{ tx: Transaction }> = ({ tx }) => {
       : 'text-[#111315] dark:text-[#F4F5F0]';
 
   return (
-    <span className={`text-xs font-bold font-mono tabular-nums ${colorClass}`}>
+    <span className={`${size === 'md' ? 'text-sm' : 'text-xs'} font-bold font-mono tabular-nums ${colorClass}`}>
       <HoldAmount
         amount={tx.amount}
         currency={tx.currency}

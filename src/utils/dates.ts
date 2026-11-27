@@ -100,6 +100,13 @@ export function describeDeadline(
   return { label: formatShortDate(dateStr, today), tone: 'later' };
 }
 
+/** Compact list date: "Today", "Yesterday", otherwise "Nov 24" (year added outside the current year). */
+export function formatRelativeShortDate(dateStr: string, today: Date = new Date()): string {
+  if (dateStr === localDateString(today)) return 'Today';
+  if (dateStr === localDateString(shiftLocalDate(today, 1))) return 'Yesterday';
+  return formatShortDate(dateStr, today);
+}
+
 /**
  * Groups items by their `date` (YYYY-MM-DD), newest day first.
  * Order within a day is preserved from the input.

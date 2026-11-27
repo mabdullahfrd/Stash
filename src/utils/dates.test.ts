@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  formatRelativeShortDate,
   describeDeadline,
   formatShortDate,
   formatDayHeading,
@@ -22,6 +23,14 @@ test('formatDayHeading uses Today / Yesterday / weekday labels and adds year onl
   assert.equal(formatDayHeading('2026-11-24', today), 'Tue, Nov 24');
   assert.equal(formatDayHeading('2025-11-24', today), 'Mon, Nov 24, 2025');
   assert.equal(formatDayHeading('not-a-date', today), 'not-a-date');
+});
+
+test('formatRelativeShortDate keeps list dates short', () => {
+  const today = new Date(2026, 10, 27);
+  assert.equal(formatRelativeShortDate('2026-11-27', today), 'Today');
+  assert.equal(formatRelativeShortDate('2026-11-26', today), 'Yesterday');
+  assert.equal(formatRelativeShortDate('2026-11-07', today), 'Nov 7');
+  assert.equal(formatRelativeShortDate('2025-12-31', today), 'Dec 31, 2025');
 });
 
 test('groupByDay groups newest day first and keeps order within a day', () => {

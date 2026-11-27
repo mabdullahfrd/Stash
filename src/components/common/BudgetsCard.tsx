@@ -69,11 +69,11 @@ export const BudgetsCard: React.FC = () => {
     >
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-bold tracking-tight text-[#111315] dark:text-[#F4F5F0] flex items-center gap-1.5">
+          <h2 className="text-[15px] font-semibold tracking-tight text-[#111315] dark:text-[#F4F5F0] flex items-center gap-1.5">
             <Target className="w-4 h-4" />
             Monthly budgets
           </h2>
-          <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">{monthName} spending vs. your limits</p>
+          <p className="text-xs text-[#6B7268] dark:text-[#8E9689]">{monthName} spending against your limits</p>
         </div>
         {!isAdding && available.length > 0 && (
           <button
@@ -129,7 +129,7 @@ export const BudgetsCard: React.FC = () => {
       )}
 
       {rows.length === 0 && !isAdding ? (
-        <p className="text-[11px] text-[#6B7268] dark:text-[#8E9689]">
+        <p className="text-xs text-[#6B7268] dark:text-[#8E9689]">
           Set a monthly limit for a category — for example Coffee {formatCurrency(activeCurrency === 'KRW' ? 50000 : 40, activeCurrency)} — and see how much is left as you spend.
         </p>
       ) : (
@@ -140,7 +140,7 @@ export const BudgetsCard: React.FC = () => {
             return (
               <li key={budget.categoryId} className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-[#111315] dark:text-[#F4F5F0] truncate">
+                  <span className="text-sm font-semibold leading-snug text-[#111315] dark:text-[#F4F5F0] line-clamp-2 break-words break-keep min-w-0">
                     {category?.name ?? 'Removed category'}
                   </span>
                   {isEditing ? (
@@ -175,8 +175,18 @@ export const BudgetsCard: React.FC = () => {
                     </span>
                   ) : (
                     <span className="flex items-center gap-1 shrink-0">
-                      <span className="text-[11px] font-mono tabular-nums text-[#4B5248] dark:text-[#B4BCB0]">
-                        {formatCurrency(spent, budget.currency)} / {formatCurrency(budget.amount, budget.currency)}
+                      <span
+                        className={`text-sm font-semibold font-mono tabular-nums ${
+                          status === 'over'
+                            ? 'text-rose-600 dark:text-rose-400'
+                            : status === 'warning'
+                              ? 'text-amber-700 dark:text-amber-300'
+                              : 'text-[#111315] dark:text-[#F4F5F0]'
+                        }`}
+                      >
+                        {status === 'over'
+                          ? `${formatCurrency(-remaining, budget.currency)} over`
+                          : `${formatCurrency(remaining, budget.currency)} left`}
                       </span>
                       <button
                         type="button"
@@ -202,18 +212,8 @@ export const BudgetsCard: React.FC = () => {
                 >
                   <div className={`h-full rounded-full ${barClass[status]}`} style={{ width: `${Math.min(100, percent)}%` }} />
                 </div>
-                <p
-                  className={`text-[11px] font-medium ${
-                    status === 'over'
-                      ? 'text-rose-600 dark:text-rose-400'
-                      : status === 'warning'
-                        ? 'text-amber-700 dark:text-amber-300'
-                        : 'text-[#6B7268] dark:text-[#8E9689]'
-                  }`}
-                >
-                  {status === 'over'
-                    ? `${formatCurrency(-remaining, budget.currency)} over budget`
-                    : `${formatCurrency(remaining, budget.currency)} left · ${percent}% used`}
+                <p className="text-xs text-[#6B7268] dark:text-[#8E9689] tabular-nums">
+                  {formatCurrency(spent, budget.currency)} of {formatCurrency(budget.amount, budget.currency)} spent ({percent}%)
                 </p>
               </li>
             );
